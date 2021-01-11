@@ -1,5 +1,5 @@
 import express from 'express'
-import routes from './api'
+import feeds from './feeds'
 import { PORT, ENVIRONMENT } from './config'
 import { HTTP_STATUS_CODE, ENVIRONMENT as ENV } from './utils/constants'
 import packageInfo from '../package.json'
@@ -13,11 +13,11 @@ class App {
 
 const app = new App().application
 async function bootstrap(app: express.Application) {
-	// API
 	app.get('/', (req: express.Request, res: express.Response) => {
 		res.json({ version: packageInfo.version })
 	})
-	app.use('/api', routes)
+	// Feeds
+	app.use('/feeds', feeds)
 
 	// Error Handlers
 	app.use((req: express.Request, res: express.Response) => {
