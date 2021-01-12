@@ -63,30 +63,7 @@ router.get('/naver-shopping', async (req: Request, res: Response) => {
 			'Y' AS 'import_flag',
 			'구매대행' AS 'product_flag',
 			bi.brand_name AS 'brand_name',
-			(
-				SELECT IFNULL(
-					(
-						SELECT sp.name
-						FROM shop_promotion_map spm
-						JOIN shop_promotions sp on spm.shop_promotion_id = sp.id
-						WHERE spm.item_id = ii.idx
-							AND sp.is_active = 1
-							AND (sp.started_at IS NULL OR sp.started_at < CURRENT_TIMESTAMP)
-							AND (sp.ended_at IS NULL OR sp.ended_at > CURRENT_TIMESTAMP)
-						LIMIT 1
-					),
-					(
-						SELECT cec.name
-						FROM cafe24_exhibition_item cei
-						JOIN cafe24_exhibition_category cec on cei.exhibition_id = cec.exhibition_id
-						WHERE cei.item_id = ii.idx
-							AND cec.is_active = 1
-							AND (cec.started_at IS NULL OR cec.started_at < CURRENT_TIMESTAMP)
-							AND (cec.ended_at IS NULL OR cec.ended_at > CURRENT_TIMESTAMP)
-						LIMIT 1
-					)
-				)
-			) AS 'event_words',
+			'100% 정품, 관부가세 포함, 기한한정 세일!' AS 'event_words',
 			0 AS 'shipping',
 			(
 				SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', ip.final_price + IFNULL(i.optional_price, 0)) SEPARATOR '|'), ',', 10)
