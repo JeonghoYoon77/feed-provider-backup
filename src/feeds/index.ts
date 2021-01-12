@@ -9,6 +9,7 @@ import { parse } from 'json2csv'
 const router = Router()
 
 router.get('/naver-shopping', async (req: Request, res: Response) => {
+	const limit = 92000
 	const query = `
 		SELECT
 			cud.product_no AS 'id',
@@ -108,7 +109,7 @@ router.get('/naver-shopping', async (req: Request, res: Response) => {
 		JOIN cafe24_upload_db cud on ii.idx = cud.item_id
 		WHERE ii.is_verify = 1
 			AND cud.is_active = 1
-		LIMIT 92000
+		LIMIT ${limit}
 	`
 	const data = await MySQL.execute(query)
 
@@ -125,6 +126,7 @@ router.get('/naver-shopping', async (req: Request, res: Response) => {
 })
 
 router.get('/google-shopping', async (req: Request, res: Response) => {
+	const limit = 149000
 	const query = `
 		SELECT
 			ii.idx as 'id',
@@ -185,7 +187,7 @@ router.get('/google-shopping', async (req: Request, res: Response) => {
 		) = fc.idx
 		WHERE c24ul.is_naver_upload = 1
 			OR c24ul.is_smart_store_upload = 1
-		LIMIT 149000
+		LIMIT ${limit}
 	`
 	const data = await MySQL.execute(query)
 
