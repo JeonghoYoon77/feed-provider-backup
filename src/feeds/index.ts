@@ -172,8 +172,8 @@ router.get('/google-shopping', async (req: Request, res: Response) => {
 			'no' as 'adult',
 			IF(ii.item_gender = 'W', 'female', 'male') as 'gender',
 			ii.idx as 'item_group_id'
-		FROM item_info ii
-		JOIN cafe24_upload_list c24ul on ii.idx = c24ul.item_id
+		FROM cafe24_upload_list c24ul
+		JOIN item_info ii on c24ul.item_id = ii.idx
 		JOIN cafe24_upload_db c24ud on ii.idx = c24ud.item_id
 		JOIN item_price ip on ii.idx = ip.item_id
 		JOIN item_origin_price iop on ii.idx = iop.item_id
