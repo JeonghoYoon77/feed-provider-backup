@@ -5,7 +5,8 @@
   "main": "src/app.ts",
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && node server/src/app.js",
+    "start": "node server/src/app.js",
+    "deploy": "npm run build && eb deploy",
     "test": "jest --config ./test/jest-e2e.json --forceExit",
     "lint": "eslint --ext .js,.ts ./src",
     "lint:fix": "eslint --fix --ext .js,.ts ./src"
