@@ -8,6 +8,7 @@ import { parse } from 'json2csv'
 
 const router = Router()
 
+// 네이버 쇼핑 피드
 router.get('/naver-shopping', async (req: Request, res: Response) => {
 	const limit = 92000
 	const query = `
@@ -125,6 +126,7 @@ router.get('/naver-shopping', async (req: Request, res: Response) => {
 	res.end(Buffer.from(tsv, 'utf-8'))
 })
 
+// 구글 쇼핑 피드
 router.get('/google-shopping', async (req: Request, res: Response) => {
 	const limit = 149000
 	const query = `
