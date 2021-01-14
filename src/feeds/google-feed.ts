@@ -84,6 +84,7 @@ export class GoogleFeed implements iFeed {
 		const tsv = parse(data, {
 			fields: Object.keys(data[0]),
 			delimiter: '\t',
+			quote: '',
 		})
 	
 		return Buffer.from(tsv, 'utf-8')
