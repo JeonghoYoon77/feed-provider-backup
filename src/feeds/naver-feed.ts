@@ -16,7 +16,7 @@ export class NaverFeed implements iFeed {
 	}
 
 	async getTsvBuffer(): Promise<Buffer> {
-		const limit = 92000
+		const limit = 99999
 		const query = `
 			SELECT
 				cud.product_no AS 'id',
