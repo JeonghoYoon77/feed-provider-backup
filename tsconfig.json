@@ -8,7 +8,7 @@
     "allowSyntheticDefaultImports": true,
     "target": "es2017",
     "sourceMap": true,
-    "outDir": "./server",
+    "outDir": "./dist",
     "baseUrl": "./",
     "incremental": true,
     "resolveJsonModule": true,
@@ -19,6 +19,6 @@
   ],
   "exclude": [
     "node_modules",
-    "server"
+    "dist"
   ]
 }

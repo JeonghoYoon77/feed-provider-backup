@@ -5,8 +5,7 @@
   "main": "src/app.ts",
   "scripts": {
     "build": "tsc",
-    "start": "node server/src/app.js",
-    "deploy": "npm run build && eb deploy",
+    "start": "npm run build && node dist/src/app.js",
     "test": "jest --config ./test/jest-e2e.json --forceExit",
     "lint": "eslint --ext .js,.ts ./src",
     "lint:fix": "eslint --fix --ext .js,.ts ./src"
@@ -18,16 +17,15 @@
   "author": "whitekiwi",
   "license": "ISC",
   "dependencies": {
-    "@types/express": "^4.17.9",
+    "aws-sdk": "^2.827.0",
     "bluebird": "^3.7.2",
+    "commander": "^6.2.1",
     "dotenv": "^8.2.0",
-    "express": "^4.17.1",
-    "express-promise-router": "^4.0.1",
     "json2csv": "^5.0.5",
     "mysql2": "^2.2.5"
   },
   "devDependencies": {
-    "@types/supertest": "^2.0.10",
+    "@types/node": "^14.14.20",
     "@typescript-eslint/eslint-plugin": "^4.8.1",
     "@typescript-eslint/parser": "^4.8.1",
     "eslint": "^7.13.0",

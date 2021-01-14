@@ -2,7 +2,7 @@
 node_modules
 
 # compiled files
-/server
+/dist
 
 # vscode files
 .vscode
@@ -12,10 +12,3 @@ node_modules
 
 # etc
 .DS_Store
-
-# Elastic Beanstalk Files
-.elasticbeanstalk/*
-!.elasticbeanstalk/*.cfg.yml
-!.elasticbeanstalk/*.global.yml
-.ebextensions
-.platform

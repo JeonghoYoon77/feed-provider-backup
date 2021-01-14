@@ -9,7 +9,6 @@ if (process.env.NODE_ENV && process.env.NODE_ENV.toUpperCase() === ENV.TEST) {
 	process.env.ENVIRONMENT = (process.env.ENVIRONMENT || ENV.DEVELOPMENT).toUpperCase()
 }
 export const ENVIRONMENT = process.env.ENVIRONMENT
-export const PORT = process.env.PORT || 3011
 export const MYSQL = {
 	HOST: process.env.MYSQL_HOST,
 	PORT: parseInt(process.env.MYSQL_PORT || '3306'),
@@ -20,9 +19,16 @@ export const MYSQL = {
 	USER: process.env.MYSQL_USER,
 	PASSWORD: process.env.MYSQL_PASSWORD,
 }
+export const AWS = {
+	S3: {
+		URL: process.env.AWS_S3_URL
+	},
+	ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+	SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+}
 
 export default {
-	PORT,
 	ENVIRONMENT,
 	MYSQL,
+	AWS,
 }
