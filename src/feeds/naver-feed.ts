@@ -91,8 +91,9 @@ export class NaverFeed implements iFeed {
 			JOIN item_price ip on ii.idx = ip.item_id
 			JOIN item_origin_price iop on ii.idx = iop.item_id
 			JOIN cafe24_upload_db cud on ii.idx = cud.item_id
+			JOIN cafe24_upload_list cul on ii.idx = cul.item_id
 			WHERE ii.is_verify = 1
-				AND cud.is_active = 1
+				AND cul.is_naver_upload = 1
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
