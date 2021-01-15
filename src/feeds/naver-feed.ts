@@ -107,14 +107,14 @@ export class NaverFeed implements iFeed {
 			JOIN item_origin_price iop on ii.idx = iop.item_id
 			JOIN cafe24_upload_list cul on ii.idx = cul.item_id
 			JOIN fetching_category fc on (
-				SELECT icm.item_id
+				SELECT icm.fetching_category_id
 				FROM fetching_category fc
 				JOIN item_category_map icm on fc.idx = icm.fetching_category_id
 				WHERE icm.item_id = ii.idx
 					AND fc.fetching_category_name != '기타'
 				ORDER BY fc.idx DESC
 				LIMIT 1
-			) = ii.idx
+			) = fc.idx
 			WHERE ii.is_verify = 1
 				AND cul.is_naver_upload = 1
 			LIMIT ${limit}
