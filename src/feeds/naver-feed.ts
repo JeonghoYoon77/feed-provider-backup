@@ -16,15 +16,10 @@ export class NaverFeed implements iFeed {
 	}
 
 	async getTsvBuffer(): Promise<Buffer> {
-		const { data, fields } = await this.getFeedData()
-		return Buffer.from(parse(data, {
-			fields,
-			delimiter: '\t',
-			quote: '',
-		}), 'utf-8')
+		return Buffer.from(await this.getTsv(), 'utf-8')
 	}
 
-	async getFeedData() {
+	async getTsv() {
 		const limit = 99999
 		const query = `
 			SELECT
@@ -129,10 +124,12 @@ export class NaverFeed implements iFeed {
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
-		return {
-			data,
+
+		return parse(data, {
 			fields: Object.keys(data),
-		}
+			delimiter: '\t',
+			quote: '',
+		})
 	}
 }
 
