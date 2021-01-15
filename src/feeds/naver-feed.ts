@@ -23,7 +23,7 @@ export class NaverFeed implements iFeed {
 				REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name), '\n', ''), '\t', '') AS 'title',
 				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_pc',
 				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_mobile',
-				CEIL(iop.final_price / 100) * 100 AS 'normal_price',
+				CEIL(iop.final_price * 0.97 / 100) * 100 AS 'normal_price',
 				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'link',
 				CONCAT('https://m.fetching.co.kr/app/detail.html?product_no=', cud.product_no) AS 'mobile_link',
 				ii.image_url AS 'image_link',
@@ -49,7 +49,14 @@ export class NaverFeed implements iFeed {
 						AND fc.fetching_category_depth = 1
 					LIMIT 1
 				) AS 'category_name2',
-				fc.fetching_category_name AS 'category_name3',
+				(
+					SELECT fc.fetching_category_name
+					FROM fetching_category fc
+					JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+					WHERE icm.item_id = ii.idx
+						AND fc.fetching_category_depth = 2
+					LIMIT 1
+				) AS 'category_name3',
 				(
 					SELECT fc.smartstore_category_id
 					FROM fetching_category fc
@@ -63,7 +70,7 @@ export class NaverFeed implements iFeed {
 				'100% 정품, 관부가세 포함, 기한한정 세일!' AS 'event_words',
 				0 AS 'shipping',
 				(
-					SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', ip.final_price + IFNULL(i.optional_price, 0)) SEPARATOR '|'), ',', 10)
+					SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', CEIL((ip.final_price + IFNULL(i.optional_price, 0)) * 0.97 / 100) * 100) SEPARATOR '|'), ',', 10)
 					FROM item_size i
 					WHERE i.item_id = ii.idx
 				) AS 'option_detail',
@@ -71,7 +78,7 @@ export class NaverFeed implements iFeed {
 				'Y' AS 'includes_vat',
 				CONCAT_WS('|',
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
-					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.brand_name, fc.fetching_category_name),
+					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.brand_name_kor, fc.fetching_category_name),
 					(
 						SELECT bsi.semi_name
 						FROM brand_semi_name bsi
@@ -104,6 +111,7 @@ export class NaverFeed implements iFeed {
 				FROM fetching_category fc
 				JOIN item_category_map icm on fc.idx = icm.fetching_category_id
 				WHERE icm.item_id = ii.idx
+					AND fc.fetching_category_name != '기타'
 				ORDER BY fc.idx DESC
 				LIMIT 1
 			) = ii.idx
