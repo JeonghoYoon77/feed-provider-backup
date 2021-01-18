@@ -29,7 +29,7 @@ export class NaverFeed implements iFeed {
 				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_mobile',
 				CEIL(iop.final_price * 0.97 / 100) * 100 AS 'normal_price',
 				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'link',
-				CONCAT('https://m.fetching.co.kr/app/detail.html?product_no=', cud.product_no) AS 'mobile_link',
+				CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'mobile_link',
 				ii.image_url AS 'image_link',
 				(
 					SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
