@@ -80,7 +80,7 @@ export class NaverFeed implements iFeed {
 				) AS 'option_detail',
 				IF(ii.item_gender = 'M', '남성', '여성') AS 'gender',
 				'Y' AS 'includes_vat',
-				CONCAT_WS('|',
+				REPLACE(CONCAT_WS('|',
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.brand_name_kor, fc.fetching_category_name),
 					(
@@ -103,7 +103,7 @@ export class NaverFeed implements iFeed {
 						LIMIT 1
 						OFFSET 2
 					)
-				) AS 'search_tag'
+				), '\t', ' ') AS 'search_tag'
 			FROM cafe24_upload_db cud
 			JOIN item_info ii on cud.item_id = ii.idx
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
@@ -126,7 +126,7 @@ export class NaverFeed implements iFeed {
 		const data = await MySQL.execute(query)
 
 		return parse(data, {
-			fields: Object.keys(data),
+			fields: Object.keys(data[0]),
 			delimiter: '\t',
 			quote: '',
 		})
