@@ -22,7 +22,7 @@ export class KakaoFeed implements iFeed {
 		const limit = 99999
 		const query = `
 			SELECT
-				cud.product_no AS 'id',
+				ii.idx AS 'id',
 				REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name), '
 ', ''), '\t', '') AS 'title',
 				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_pc',
@@ -97,6 +97,7 @@ export class KakaoFeed implements iFeed {
 			) = fc.idx
 			WHERE ii.is_verify = 1
 				AND cul.is_naver_upload = 1
+				AND ii.item_name REGEXP '(?s)^((?![A-Za-z]).)*$'
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
