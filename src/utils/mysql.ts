@@ -13,6 +13,10 @@ const connectionPool = createPool({
 	Promise: bluebird,
 	timezone: '+00:00', // DB에 저장된 시간 그대로 받아오기 위해서
 })
+process.on('exit', async (code) => {
+	await MySQL.dispose()
+	console.log('connection closed')
+})
 export class MySQL {
 	/**
 	 * @param {string} query
@@ -30,5 +34,9 @@ export class MySQL {
 		} finally {
 			connection.release()
 		}
+	}
+
+	static async dispose() {
+		await connectionPool.end()
 	}
 }
