@@ -97,7 +97,8 @@ export class KakaoFeed implements iFeed {
 			) = fc.idx
 			WHERE ii.is_verify = 1
 				AND cul.is_naver_upload = 1
-				AND ii.item_name REGEXP '(?s)^((?![A-Za-z]).)*$'
+				AND fc.fetching_category_name REGEXP '(?s)^((?=[가-힣0-9 ]).)*$'
+				AND ii.item_name REGEXP '(?s)^((?=[가-힣0-9 ]).)*$'
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
