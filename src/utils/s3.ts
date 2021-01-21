@@ -5,15 +5,16 @@ export class S3Client {
     static client
     static s3Url: string
 
-    static async upload({ folderName, fileName, buffer }) {
+    static async upload({ folderName, fileName, buffer, contentType = 'text/tsv' }) {
     	const key = `${folderName}/${fileName}`
     	const params = {
     		ACL: 'public-read',
     		Bucket: 'fetching-feeds',
+    		ContentType: contentType,
     		Key: key,
     		Body: buffer,
     	}
-    
+
     	const client = new S3({
     		accessKeyId: AWS.ACCESS_KEY_ID,
     		secretAccessKey: AWS.SECRET_ACCESS_KEY,

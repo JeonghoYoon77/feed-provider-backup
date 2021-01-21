@@ -12,6 +12,7 @@ export class KakaoFeed implements iFeed {
 			folderName: 'feeds',
 			fileName: 'kakao-feed.txt',
 			buffer,
+			contentType: 'text/plain'
 		})
 		console.log(`FEED_URL: ${feedUrl}`)
 	}
