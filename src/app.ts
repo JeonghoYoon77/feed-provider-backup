@@ -3,6 +3,7 @@ import { version } from '../package.json'
 import {
 	NaverFeed,
 	GoogleFeed,
+	KakaoFeed,
 } from './feeds'
 
 program.version(version)
@@ -22,6 +23,11 @@ async function main() {
 		if (feedName === 'GOOGLE-FEED') {
 			const googleFeed = new GoogleFeed()
 			await googleFeed.upload()
+		}
+
+		if (feedName === 'KAKAO-FEED') {
+			const kakaoFeed = new KakaoFeed()
+			await kakaoFeed.upload()
 		}
 	} catch (e) {
 		console.log(e)
