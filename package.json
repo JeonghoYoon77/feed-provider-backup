@@ -21,6 +21,7 @@
     "bluebird": "^3.7.2",
     "commander": "^6.2.1",
     "dotenv": "^8.2.0",
+    "iconv-lite": "^0.6.2",
     "json2csv": "^5.0.5",
     "mysql2": "^2.2.5"
   },

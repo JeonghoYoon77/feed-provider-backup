@@ -1,6 +1,8 @@
+import { encode } from 'iconv-lite'
+
 import { iFeed } from './feed'
-import { MySQL } from '../utils'
-import { S3Client } from '../utils'
+import { MySQL, S3Client } from '../utils'
+
 
 export class KakaoFeed implements iFeed {
 	async upload() {
@@ -15,7 +17,7 @@ export class KakaoFeed implements iFeed {
 	}
 
 	async getTsvBuffer(): Promise<Buffer> {
-		return Buffer.from(await this.getTsv(), 'utf-8')
+		return encode(await this.getTsv(), 'euc-kr')
 	}
 
 	async getTsv() {
