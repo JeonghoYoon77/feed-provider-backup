@@ -18,7 +18,7 @@ export class KakaoFeed implements iFeed {
 	}
 
 	async getTsvBuffer(): Promise<Buffer> {
-		return encode(await this.getTsv(), 'euc-kr')
+		return Buffer.from(await this.getTsv(), 'utf-8')
 	}
 
 	async getTsv() {
