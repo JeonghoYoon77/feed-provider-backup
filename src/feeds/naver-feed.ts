@@ -24,7 +24,7 @@ export class NaverFeed implements iFeed {
 		const query = `
 			SELECT
 				cud.product_no AS 'id',
-				REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name), '\n', ''), '\t', '') AS 'title',
+				REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name, ii.color), '\n', ''), '\t', '') AS 'title',
 				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_pc',
 				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_mobile',
 				CEIL(iop.final_price * 0.97 / 100) * 100 AS 'normal_price',
