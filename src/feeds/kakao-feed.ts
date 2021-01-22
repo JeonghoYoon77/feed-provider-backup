@@ -22,7 +22,7 @@ export class KakaoFeed implements iFeed {
 	}
 
 	async getTsv() {
-		const limit = 99999
+		const limit = 500000
 		const query = `
 			SELECT
 				ii.idx AS 'id',
@@ -99,9 +99,7 @@ export class KakaoFeed implements iFeed {
 				LIMIT 1
 			) = fc.idx
 			WHERE ii.is_verify = 1
-				AND cul.is_naver_upload = 1
-				AND fc.fetching_category_name REGEXP '(?s)^((?=[가-힣0-9 ]).)*$'
-				AND ii.item_name REGEXP '(?s)^((?=[가-힣0-9 ]).)*$'
+			  AND cud.is_active = 1
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
