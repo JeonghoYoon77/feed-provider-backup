@@ -25,9 +25,9 @@ export class NaverFeed implements iFeed {
 			SELECT
 				cud.product_no AS 'id',
 				REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name, ii.color), '\n', ''), '\t', '') AS 'title',
-				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_pc',
-				CEIL(ip.final_price * 0.97 / 100) * 100 AS 'price_mobile',
-				CEIL(iop.final_price * 0.97 / 100) * 100 AS 'normal_price',
+				ip.final_price AS 'price_pc',
+				ip.final_price AS 'price_mobile',
+				iop.final_price AS 'normal_price',
 				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'link',
 				CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'mobile_link',
 				ii.image_url AS 'image_link',
