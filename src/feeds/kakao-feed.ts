@@ -1,5 +1,3 @@
-import { encode } from 'iconv-lite'
-
 import { iFeed } from './feed'
 import { MySQL, S3Client } from '../utils'
 
