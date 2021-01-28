@@ -104,7 +104,16 @@ export class NaverFeed implements iFeed {
 						OFFSET 2
 					)
 				), '\t', ' ') AS 'search_tag'
-			FROM cafe24_upload_db cud
+			FROM (
+				SELECT ii.idx
+				FROM cafe24_upload_list cul
+				JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
+				JOIN item_info ii on cul.item_id = ii.idx
+				WHERE ii.is_verify = 1
+					AND cul.is_naver_upload = 1
+				LIMIT ${limit}
+			) t
+			JOIN cafe24_upload_db cud on t.idx = cud.item_id
 			JOIN item_info ii on cud.item_id = ii.idx
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
 			JOIN item_price ip on ii.idx = ip.item_id
@@ -119,9 +128,6 @@ export class NaverFeed implements iFeed {
 				ORDER BY fc.idx DESC
 				LIMIT 1
 			) = fc.idx
-			WHERE ii.is_verify = 1
-				AND cul.is_naver_upload = 1
-			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
 
