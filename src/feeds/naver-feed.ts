@@ -24,7 +24,7 @@ export class NaverFeed implements iFeed {
 		const query = `
 			SELECT
 				cud.product_no AS 'id',
-				REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name, ii.color), '\n', ''), '\t', '') AS 'title',
+				REPLACE(REPLACE(CONCAT_WS(' ', bi.main_name, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name, ii.color), '\n', ''), '\t', '') AS 'title',
 				ip.final_price AS 'price_pc',
 				ip.final_price AS 'price_mobile',
 				iop.final_price AS 'normal_price',
@@ -70,7 +70,7 @@ export class NaverFeed implements iFeed {
 					LIMIT 1
 				) AS 'naver_category',
 				'신상품' AS 'condition',
-				bi.brand_name_kor AS 'brand_name',
+				bi.main_name AS 'brand_name',
 				'100% 정품, 관부가세 포함, 기한한정 세일!' AS 'event_words',
 				0 AS 'shipping',
 				(
@@ -82,7 +82,7 @@ export class NaverFeed implements iFeed {
 				'Y' AS 'includes_vat',
 				REPLACE(CONCAT_WS('|',
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
-					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.brand_name_kor, fc.fetching_category_name),
+					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.main_name, fc.fetching_category_name),
 					(
 						SELECT bsi.semi_name
 						FROM brand_semi_name bsi
