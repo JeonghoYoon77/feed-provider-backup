@@ -55,7 +55,7 @@ export class GoogleFeed implements iFeed {
 						ORDER BY fc.idx ASC
 						LIMIT 10
 				) as product_type,
-				bi.brand_name_kor 'brand',
+				bi.brand_name_kor as 'brand',
 				ii.idx as 'MPN',
 				'no' as 'adult',
 				IF(ii.item_gender = 'W', 'female', 'male') as 'gender',
@@ -85,7 +85,7 @@ export class GoogleFeed implements iFeed {
 			fields: Object.keys(data[0]),
 			delimiter: '\t',
 		})
-	
+
 		return Buffer.from(tsv, 'utf-8')
 	}
 }
