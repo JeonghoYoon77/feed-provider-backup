@@ -98,6 +98,7 @@ export class KakaoFeed implements iFeed {
 			) = fc.idx
 			WHERE ii.is_verify = 1
 			  AND cud.is_active = 1
+			ORDER BY cul.is_naver_upload DESC 
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
