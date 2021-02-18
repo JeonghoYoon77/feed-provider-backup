@@ -30,7 +30,15 @@ export class NaverFeed implements iFeed {
 				iop.final_price AS 'normal_price',
 				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'link',
 				CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'mobile_link',
-				ii.image_url AS 'image_link',
+				IF (ii.shop_id IN (2, 3, 4, 5, 53, 62), (
+					SELECT item_image_url
+					FROM item_image
+					WHERE item_id = ii.idx AND priority=2
+					), IF (ii.shop_id IN (72), (
+					SELECT item_image_url
+					FROM item_image
+					WHERE item_id = ii.idx AND priority=4
+					), ii.image_url)) AS 'image_link',
 				(
 					SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
 					FROM item_image ig
