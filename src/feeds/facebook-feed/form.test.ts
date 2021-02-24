@@ -2,7 +2,7 @@ import Form from './form'
 import rows from './form.fixtures'
 
 describe('Form', () => {
-	it('', () => {
+	it('returns converted facebook feed form', () => {
 		const contents = Form(rows)
     
 		expect(contents).toHaveLength(rows.length)
