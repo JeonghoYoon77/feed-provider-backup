@@ -4,7 +4,8 @@ module.exports = {
 		'@typescript-eslint',
 	],
 	env: {
-		node: true
+		node: true,
+		jest: true,
 	},
 	globals: {
 		process: 'writable',
