@@ -8,19 +8,17 @@ SELECT
   cud.product_no,
   ii.image_url,
   ii.brand_name
-FROM cafe24_upload_list cul
-
-JOIN cafe24_upload_db cud
-ON cul.item_id = cud.item_id
+FROM cafe24_upload_db cud
 
 JOIN item_info ii
-ON cul.item_id = ii.idx
+ON cud.item_id = ii.idx
 
 JOIN item_price ip
 ON ii.idx = ip.item_id
 
 WHERE ii.is_verify = 1
-AND cul.is_naver_upload = 1
+AND cud.is_active = 1
+AND ii.item_priority > 0
 ORDER BY ii.item_priority DESC
 LIMIT ${limit};
 `
