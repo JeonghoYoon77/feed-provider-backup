@@ -6,12 +6,15 @@ describe('Form', () => {
 		const contents = Form(rows)
     
 		expect(contents).toHaveLength(rows.length)
-		expect(contents[0].id).toBe(Number(rows[0].idx))
-		expect(contents[0].title).toBe(rows[0]['item_title'])
-		expect(contents[0].description).toBe(rows[0]['item_description'])
-		expect(contents[0].price).toBe(rows[0]['final_price'] + 'KRW')
-		expect(contents[0].link).toBe('https://fetching.co.kr/product/detail.html?product_no=' + rows[0]['product_no'])
-		expect(contents[0]['image_link']).toBe(rows[0]['image_url'])
-		expect(contents[0].brand).toBe(rows[0]['brand_name'])
+
+		contents.forEach((content, i: number) => {
+			expect(content.id).toBe(Number(rows[i].idx))
+			expect(content.title).toBe(rows[i]['item_title'])
+			expect(content.description).toBe(rows[i]['item_description'])
+			expect(content.price).toBe(rows[i]['final_price'] + 'KRW')
+			expect(content.link).toBe('https://fetching.co.kr/product/detail.html?product_no=' + rows[i]['product_no'])
+			expect(content['image_link']).toBe(rows[i]['image_url'])
+			expect(content.brand).toBe(rows[i]['brand_name'])
+		})
 	})
 })
