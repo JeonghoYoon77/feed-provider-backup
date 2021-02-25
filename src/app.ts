@@ -4,8 +4,8 @@ import {
 	NaverFeed,
 	GoogleFeed,
 	KakaoFeed,
+	FacebookFeed,
 } from './feeds'
-import FacebookFeed from './feeds/facebook-feed'
 
 program.version(version)
 program
