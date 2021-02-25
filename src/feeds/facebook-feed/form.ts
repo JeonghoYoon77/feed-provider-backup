@@ -1,7 +1,7 @@
 import { RowDataPacket } from 'mysql2/promise'
 import { parseInt } from 'lodash'
 
-interface FormProps {
+export interface FormProps {
   id: number;
   title: string;
   description: string;
@@ -33,7 +33,7 @@ function Form(rows: RowDataPacket[]): FormProps[] {
 			condition,
 			price,
 			link,
-			'image_link': imageLink,
+			image_link: imageLink,
 			brand,
 		}
 	})

@@ -1,4 +1,4 @@
-function query(limit: number): string {
+function Query(limit: number): string {
 	return `
 SELECT
   ii.idx,
@@ -25,4 +25,4 @@ LIMIT ${limit};
 `
 }
 
-export default query
+export default Query
