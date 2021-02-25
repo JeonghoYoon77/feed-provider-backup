@@ -20,9 +20,8 @@ function Form(rows: RowDataPacket[]): FormProps[] {
 		const description: string = row['item_description']
 		const availability: string = 'available for order'
 		const condition: string = 'new'
-		const price: string = (<number>row['final_price']).toString() + 'KRW'
-		const link: string = 'https://fetching.co.kr/product/detail.html?product_no='
-      + (<number>row['product_no']).toString()
+		const price: string = makePrice(<number>row['final_price'])
+		const link: string = makeLink(<number>row['product_no'])
 		const imageLink: string = row['image_url']
 		const brand: string = row['brand_name']
 
@@ -39,6 +38,16 @@ function Form(rows: RowDataPacket[]): FormProps[] {
 		}
 	})
 	return contents
+}
+
+function makePrice(finalPrice: number): string {
+	const currency = 'KRW'
+	return finalPrice.toString() + currency
+}
+
+function makeLink(productNo: number): string {
+	const fetchingCafe24URL = 'https://fetching.co.kr/product/detail.html?product_no='
+	return fetchingCafe24URL + productNo.toString()
 }
 
 export default Form
