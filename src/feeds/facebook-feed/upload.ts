@@ -51,7 +51,7 @@ async function setContents(
   const sheetContents = currentContents.map((content: Form) => content.toObject())
 
   await sheet.addRows(sheetContents)
-  console.log(`insert rows ${index} ~ ${nextIndex}`)
+  console.log(`upload rows ${index} ~ ${nextIndex}`)
 
   return setContents(sheet, contents, nextIndex)
 }
