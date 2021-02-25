@@ -1,20 +1,56 @@
 import { RowDataPacket } from 'mysql2/promise'
 import { parseInt } from 'lodash'
 
-export interface FormProps {
-  id: number;
-  title: string;
-  description: string;
-  availability: string;
-  condition: string;
-  price: string;
-  link: string;
-  'image_link': string;
-  brand: string;
+export class Form {
+  private id: number;
+  private title: string;
+  private description: string;
+  private availability: string;
+  private condition: string;
+  private price: string;
+  private link: string;
+  private image_link: string;
+  private brand: string;
+
+	constructor(
+		id: number,
+		title: string,
+		description: string,
+		availability: string,
+		condition: string,
+		price: string,
+		link: string,
+		image_link: string,
+		brand: string,
+	) {
+		this.id = id
+		this.title = title
+		this.description = description
+		this.availability = availability
+		this.condition = condition
+		this.price = price
+		this.link = link
+		this.image_link = image_link
+		this.brand = brand
+	}
+
+	toObject() {
+		return {
+			id: this.id,
+			title: this.title,
+			description: this.description,
+			availability: this.availability,
+			condition: this.condition,
+			price: this.price,
+			link: this.link,
+			image_link: this.image_link,
+			brand: this.brand,
+		}
+	}
 }
 
-function Form(rows: RowDataPacket[]): FormProps[] {
-	const contents = rows.map((row: RowDataPacket): FormProps => {
+function Format(rows: RowDataPacket[]): Form[] {
+	const contents = rows.map((row: RowDataPacket): Form => {
 		const id: number = parseInt(row.idx)
 		const title: string = row['item_name']
 		const description: string = row['item_description']
@@ -25,7 +61,7 @@ function Form(rows: RowDataPacket[]): FormProps[] {
 		const imageLink: string = row['image_url']
 		const brand: string = row['brand_name']
 
-		return {
+		return new Form(
 			id,
 			title,
 			description,
@@ -33,9 +69,9 @@ function Form(rows: RowDataPacket[]): FormProps[] {
 			condition,
 			price,
 			link,
-			image_link: imageLink,
+			imageLink,
 			brand,
-		}
+		)
 	})
 	return contents
 }
@@ -50,4 +86,4 @@ function makeLink(productNo: number): string {
 	return fetchingCafe24URL + productNo.toString()
 }
 
-export default Form
+export default Format
