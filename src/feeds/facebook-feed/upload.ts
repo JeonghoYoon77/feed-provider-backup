@@ -1,9 +1,7 @@
 import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadsheet'
 
-import info from '../../../access.json'
+import access from '../../../access.json'
 import { FormProps } from './form'
-
-const SPREACSHEET_ID = '1LbkUtiVKm48vA1SAxbqPtZ2WOhqwJKOkw9-JPIh8jvA'
 
 const headers = [
   'id',
@@ -25,11 +23,11 @@ async function Upload(contents: FormProps[]): Promise<void> {
 }
 
 async function getSheet(): Promise<GoogleSpreadsheetWorksheet> {
-  const doc: GoogleSpreadsheet = new GoogleSpreadsheet(SPREACSHEET_ID);
+  const doc: GoogleSpreadsheet = new GoogleSpreadsheet(access.spreadsheet_id);
   
   await doc.useServiceAccountAuth({
-    client_email: info.client_email,
-    private_key: info.private_key,
+    client_email: access.client_email,
+    private_key: access.private_key,
   });
 
   await doc.loadInfo()
