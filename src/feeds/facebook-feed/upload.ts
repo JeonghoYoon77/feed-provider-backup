@@ -1,4 +1,5 @@
 import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadsheet'
+import { slice } from 'lodash'
 
 import access from '../../../facebook_spreadsheet_access.json'
 import { FormProps } from './form'
@@ -37,21 +38,32 @@ async function getSheet(): Promise<GoogleSpreadsheetWorksheet> {
 
 async function setContents(
   sheet: GoogleSpreadsheetWorksheet, 
-  contents: FormProps[]
+  contents: FormProps[],
+  index: number | undefined = 0,
 ): Promise<void> {
-  for (const content of contents) {
-    await sheet.addRow({
-      id: content.id,
-      title: content.title,
-      description: content.description,
-      availability: content.availability,
-      condition: content.condition,
-      price: content.price,
-      link: content.link,
-      image_link: content.image_link,
-      brand: content.brand,
-    })
+  if (contents.length < index) {
+    return
   }
+
+  const sheetContents = contents.map((content: FormProps) => ({
+    id: content.id,
+    title: content.title,
+    description: content.description,
+    availability: content.availability,
+    condition: content.condition,
+    price: content.price,
+    link: content.link,
+    image_link: content.image_link,
+    brand: content.brand,
+  }))
+  const sliceSize = 1000
+  const nextIndex = index + sliceSize
+  const currentSheetContents = slice(sheetContents, index, nextIndex)
+
+  await sheet.addRows(currentSheetContents)
+  console.log(`insert rows ${index} ~ ${nextIndex}`)
+
+  return setContents(sheet, contents, nextIndex)
 }
 
 export default Upload
