@@ -3,7 +3,7 @@ import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadshee
 import access from '../../../facebook_spreadsheet_access.json'
 import { FormProps } from './form'
 
-const headers = [
+const headers: string[] = [
   'id',
   'title',
   'description',
