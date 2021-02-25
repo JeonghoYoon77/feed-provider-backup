@@ -4,6 +4,7 @@ import {
 	NaverFeed,
 	GoogleFeed,
 	KakaoFeed,
+	FacebookFeed,
 } from './feeds'
 
 program.version(version)
@@ -13,22 +14,26 @@ program.parse(process.argv)
 
 async function main() {
 	const feedName = (program.feedName || '').toUpperCase()
-
-	try {
-		if (feedName === 'NAVER-FEED') {
+	const feedExecute = {
+		'NAVER-FEED': async () => {
 			const naverFeed = new NaverFeed()
 			await naverFeed.upload()
-		}
-
-		if (feedName === 'GOOGLE-FEED') {
+		},
+		'GOOGLE-FEED': async () => {
 			const googleFeed = new GoogleFeed()
 			await googleFeed.upload()
-		}
-
-		if (feedName === 'KAKAO-FEED') {
+		},
+		'KAKAO-FEED': async () => {
 			const kakaoFeed = new KakaoFeed()
 			await kakaoFeed.upload()
+		},
+		'FACEBOOK-FEED': async () => {
+			await FacebookFeed()
 		}
+	}
+
+	try {
+		await feedExecute[feedName]()
 	} catch (e) {
 		console.log(e)
 		process.exit(1)
