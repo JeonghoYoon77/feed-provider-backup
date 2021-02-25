@@ -1,6 +1,6 @@
 import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadsheet'
 
-import access from '../../../access.json'
+import access from '../../../facebook_spreadsheet_access.json'
 import { FormProps } from './form'
 
 const headers = [
