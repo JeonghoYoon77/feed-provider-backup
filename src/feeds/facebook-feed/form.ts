@@ -16,7 +16,7 @@ export interface FormProps {
 function Form(rows: RowDataPacket[]): FormProps[] {
 	const contents = rows.map((row: RowDataPacket): FormProps => {
 		const id: number = parseInt(row.idx)
-		const title: string = row['item_title']
+		const title: string = row['item_name']
 		const description: string = row['item_description']
 		const availability: string = 'available for order'
 		const condition: string = 'new'
