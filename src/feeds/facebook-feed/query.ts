@@ -21,6 +21,7 @@ ON ii.idx = ip.item_id
 
 WHERE ii.is_verify = 1
 AND cul.is_naver_upload = 1
+ORDER BY ii.item_priority DESC
 LIMIT ${limit};
 `
 }
