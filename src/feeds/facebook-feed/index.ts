@@ -7,10 +7,14 @@ import Upload from './upload'
 
 async function FacebookFeed() {
   const limit: number = 99999
+
   const rows: RowDataPacket[] = await <Promise<RowDataPacket[]>>MySQL.execute(Query(limit))
+  console.log(`finish query: ${rows.length} lines`)
 
   const contents: FormProps[] = Form(rows)
+  console.log('finish format')
   await Upload(contents)
+  console.log('finish upload to google spread sheet')
 }
 
 export default FacebookFeed
