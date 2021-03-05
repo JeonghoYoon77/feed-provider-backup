@@ -107,10 +107,10 @@ export class NaverFeed implements iFeed {
 			FROM cafe24_upload_list cul
 			JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			JOIN item_info ii on cud.item_id = ii.idx
+            JOIN shop_info si on ii.shop_id = si.shop_id
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
 			JOIN item_price ip on ii.idx = ip.item_id
 			JOIN item_origin_price iop on ii.idx = iop.item_id
-			JOIN cafe24_upload_list cul on ii.idx = cul.item_id
 			JOIN fetching_category fc on (
 				SELECT icm.fetching_category_id
 				FROM fetching_category fc
