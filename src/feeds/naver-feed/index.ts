@@ -1,10 +1,14 @@
+import { parse } from 'json2csv'
+import { format } from 'mysql2'
+
 import { iFeed } from '../feed'
 import { MySQL } from '../../utils'
-import { parse } from 'json2csv'
 import { S3Client } from '../../utils'
 import Constants from './constants'
 import TSVFormat from './tsv-format'
 import TSVData from './tsv-data'
+
+const constants = new Constants()
 
 export class NaverFeed implements iFeed {
 	async upload() {
@@ -22,10 +26,19 @@ export class NaverFeed implements iFeed {
 		return Buffer.from(await this.getTsv(), 'utf-8')
 	}
 
-	async getTsv() {
-		const constants = new Constants()
+	async getTsv(): Promise<string> {
+		const data = await MySQL.execute(this.query())
+		const tsvData: TSVData[] = data.map(this.makeRow)
 
-		const query = `
+		return parse(tsvData, {
+			fields: Object.keys(tsvData[0]),
+			delimiter: '\t',
+			quote: '',
+		})
+	}
+
+	private query(): string {
+		return format(`
 			SELECT
 				cud.product_no AS 'id',
 				
@@ -167,58 +180,51 @@ export class NaverFeed implements iFeed {
 				), 1, 0)
 				) DESC,
 				si.priority DESC
-			LIMIT ${constants.limit()}
-		`
-		const data = await MySQL.execute(query)
+			LIMIT ?
+		`, [constants.limit()])
+	}
 
-		const tsvData = data.map((row: any): TSVData => {
-			const tsvFormat = new TSVFormat({
-				itemGender: row.item_gender,
-				id: row.id,
-			})
-			const title: string = tsvFormat.title({
-				mainName: row.main_name,
-				fetchingCategoryName: row.fetching_category_name,
-				itemName: row.item_name,
-				customColor: row.custom_color,
-			})
-			const pcLink: string = tsvFormat.pcLink({
-				cafe24PCAddress: constants.cafe24PCAddress(),
-			})
-			const mobileLink: string = tsvFormat.mobileLink({
-				cafe24MobileAddress: constants.cafe24MobileAddress(),
-			})
-
-			return {
-				id: row.id,
-				title,
-				'price_pc': row.ip_final_price,
-				'price_mobile': row.ip_final_price,
-				'normal_price': row.iop_final_price,
-				link: pcLink,
-				'mobile_link': mobileLink,
-				'image_link': row.image_link,
-				'add_image_link': row.add_image_link,
-				'category_name1': row.category_name1,
-				'category_name2': row.category_name2,
-				'category_name3': row.category_name3,
-				'naver_category': row.naver_category,
-				condition: constants.condition(),
-				'brand_name': row.main_name,
-				'event_words': constants.eventWords(),
-				shipping: constants.shipping(),
-				'option_detail': row.option_detail,
-				gender: tsvFormat.gender(),
-				'includes_vat': constants.includesVat(),
-				'search_tag': row.search_tag,
-			}
+	private makeRow(row) {
+		const tsvFormat = new TSVFormat({
+			itemGender: row.item_gender,
+			id: row.id,
+		})
+		const title: string = tsvFormat.title({
+			mainName: row.main_name,
+			fetchingCategoryName: row.fetching_category_name,
+			itemName: row.item_name,
+			customColor: row.custom_color,
+		})
+		const pcLink: string = tsvFormat.pcLink({
+			cafe24PCAddress: constants.cafe24PCAddress(),
+		})
+		const mobileLink: string = tsvFormat.mobileLink({
+			cafe24MobileAddress: constants.cafe24MobileAddress(),
 		})
 
-		return parse(tsvData, {
-			fields: Object.keys(tsvData[0]),
-			delimiter: '\t',
-			quote: '',
-		})
+		return {
+			id: row.id,
+			title,
+			'price_pc': row.ip_final_price,
+			'price_mobile': row.ip_final_price,
+			'normal_price': row.iop_final_price,
+			link: pcLink,
+			'mobile_link': mobileLink,
+			'image_link': row.image_link,
+			'add_image_link': row.add_image_link,
+			'category_name1': row.category_name1,
+			'category_name2': row.category_name2,
+			'category_name3': row.category_name3,
+			'naver_category': row.naver_category,
+			condition: constants.condition(),
+			'brand_name': row.main_name,
+			'event_words': constants.eventWords(),
+			shipping: constants.shipping(),
+			'option_detail': row.option_detail,
+			gender: tsvFormat.gender(),
+			'includes_vat': constants.includesVat(),
+			'search_tag': row.search_tag,
+		}
 	}
 }
 

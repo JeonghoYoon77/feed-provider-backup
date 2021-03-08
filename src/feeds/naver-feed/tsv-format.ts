@@ -38,6 +38,7 @@ class TSVFormat {
 			: ' ' + customColor
 				.replace(/[^a-zA-Z]/gi, ' ')
 				.toUpperCase()
+				.trim()
 	}
 }
 
