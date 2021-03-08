@@ -184,7 +184,7 @@ export class NaverFeed implements iFeed {
 		`, [constants.limit()])
 	}
 
-	private makeRow(row) {
+	private makeRow(row): TSVData {
 		const tsvFormat = new TSVFormat({
 			itemGender: row.item_gender,
 			id: row.id,
