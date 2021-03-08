@@ -3,6 +3,8 @@ import { MySQL } from '../utils'
 import { parse } from 'json2csv'
 import { S3Client } from '../utils'
 
+const LIMIT = 99999
+
 export class NaverFeed implements iFeed {
 	async upload() {
 		const buffer = await this.getTsvBuffer()
@@ -20,7 +22,6 @@ export class NaverFeed implements iFeed {
 	}
 
 	async getTsv() {
-		const limit = 99999
 		const query = `
 			SELECT
 				cud.product_no AS 'id',
@@ -165,7 +166,7 @@ export class NaverFeed implements iFeed {
 				), 1, 0)
 				) DESC,
 				si.priority DESC
-			LIMIT 100000
+			LIMIT ${LIMIT}
 		`
 		const data = await MySQL.execute(query)
 
