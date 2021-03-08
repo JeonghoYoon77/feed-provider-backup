@@ -1,7 +1,14 @@
-import { iFeed } from './feed'
-import { MySQL } from '../utils'
 import { parse } from 'json2csv'
-import { S3Client } from '../utils'
+import { format } from 'mysql2'
+
+import { iFeed } from '../feed'
+import { MySQL } from '../../utils'
+import { S3Client } from '../../utils'
+import Constants from './constants'
+import TSVFormat from './tsv-format'
+import TSVData from './tsv-data'
+
+const constants = new Constants()
 
 export class NaverFeed implements iFeed {
 	async upload() {
@@ -19,17 +26,31 @@ export class NaverFeed implements iFeed {
 		return Buffer.from(await this.getTsv(), 'utf-8')
 	}
 
-	async getTsv() {
-		const limit = 99999
-		const query = `
+	async getTsv(): Promise<string> {
+		const data = await MySQL.execute(this.query())
+		const tsvData: TSVData[] = data.map(this.makeRow)
+
+		return parse(tsvData, {
+			fields: Object.keys(tsvData[0]),
+			delimiter: '\t',
+			quote: '',
+		})
+	}
+
+	private query(): string {
+		return format(`
 			SELECT
 				cud.product_no AS 'id',
-				REPLACE(REPLACE(CONCAT_WS(' ', bi.main_name, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name, ii.color), '\n', ''), '\t', '') AS 'title',
-				ip.final_price AS 'price_pc',
-				ip.final_price AS 'price_mobile',
-				iop.final_price AS 'normal_price',
-				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'link',
-				CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'mobile_link',
+				
+				bi.main_name,
+				ii.item_gender,
+				fc.fetching_category_name,
+				ii.item_name,
+				ii.custom_color,
+				
+				ip.final_price AS 'ip_final_price',
+				iop.final_price AS 'iop_final_price',
+
 				ii.image_url AS 'image_link',
 				(
 					SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
@@ -69,17 +90,11 @@ export class NaverFeed implements iFeed {
 					ORDER BY icm.fetching_category_id DESC
 					LIMIT 1
 				) AS 'naver_category',
-				'신상품' AS 'condition',
-				bi.main_name AS 'brand_name',
-				'100% 정품, 관부가세 포함, 기한한정 세일!' AS 'event_words',
-				0 AS 'shipping',
 				(
 					SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', CEIL((ip.final_price + IFNULL(i.optional_price, 0)) * 0.97 / 100) * 100) SEPARATOR '|'), ',', 10)
 					FROM item_size i
 					WHERE i.item_id = ii.idx
 				) AS 'option_detail',
-				IF(ii.item_gender = 'M', '남성', '여성') AS 'gender',
-				'Y' AS 'includes_vat',
 				REPLACE(CONCAT_WS('|',
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.main_name, fc.fetching_category_name),
@@ -165,15 +180,51 @@ export class NaverFeed implements iFeed {
 				), 1, 0)
 				) DESC,
 				si.priority DESC
-			LIMIT 100000
-		`
-		const data = await MySQL.execute(query)
+			LIMIT ?
+		`, [constants.limit()])
+	}
 
-		return parse(data, {
-			fields: Object.keys(data[0]),
-			delimiter: '\t',
-			quote: '',
+	private makeRow(row): TSVData {
+		const tsvFormat = new TSVFormat({
+			itemGender: row.item_gender,
+			id: row.id,
 		})
+		const title: string = tsvFormat.title({
+			mainName: row.main_name,
+			fetchingCategoryName: row.fetching_category_name,
+			itemName: row.item_name,
+			customColor: row.custom_color,
+		})
+		const pcLink: string = tsvFormat.pcLink({
+			cafe24PCAddress: constants.cafe24PCAddress(),
+		})
+		const mobileLink: string = tsvFormat.mobileLink({
+			cafe24MobileAddress: constants.cafe24MobileAddress(),
+		})
+
+		return {
+			id: row.id,
+			title,
+			'price_pc': row.ip_final_price,
+			'price_mobile': row.ip_final_price,
+			'normal_price': row.iop_final_price,
+			link: pcLink,
+			'mobile_link': mobileLink,
+			'image_link': row.image_link,
+			'add_image_link': row.add_image_link,
+			'category_name1': row.category_name1,
+			'category_name2': row.category_name2,
+			'category_name3': row.category_name3,
+			'naver_category': row.naver_category,
+			condition: constants.condition(),
+			'brand_name': row.main_name,
+			'event_words': constants.eventWords(),
+			shipping: constants.shipping(),
+			'option_detail': row.option_detail,
+			gender: tsvFormat.gender(),
+			'includes_vat': constants.includesVat(),
+			'search_tag': row.search_tag,
+		}
 	}
 }
 
