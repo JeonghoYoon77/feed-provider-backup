@@ -4,6 +4,7 @@ import { parse } from 'json2csv'
 import { S3Client } from '../../utils'
 import Constants from './constants'
 import TSVFormat from './tsv-format'
+import TSVData from './tsv-data'
 
 export class NaverFeed implements iFeed {
 	async upload() {
@@ -34,9 +35,9 @@ export class NaverFeed implements iFeed {
 				ii.item_name,
 				ii.custom_color,
 				
-				ip.final_price AS 'price_pc',
-				ip.final_price AS 'price_mobile',
-				iop.final_price AS 'normal_price',
+				ip.final_price AS 'ip_final_price'
+				iop.final_price AS 'iop_final_price'
+
 				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'link',
 				CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'mobile_link',
 				ii.image_url AS 'image_link',
@@ -178,7 +179,7 @@ export class NaverFeed implements iFeed {
 		`
 		const data = await MySQL.execute(query)
 
-		const tsvData = data.map((row: any) => {
+		const tsvData = data.map((row: any): TSVData => {
 			const tsvFormat = new TSVFormat(row.item_gender)
 			const title = tsvFormat.title({
 				mainName: row.main_name,
@@ -190,6 +191,9 @@ export class NaverFeed implements iFeed {
 			return {
 				id: row.id,
 				title,
+				'price_pc': row.ip_final_price,
+				'price_mobile': row.ip_final_price,
+				'normal_price': row.iop_final_price,
 			}
 		})
 
