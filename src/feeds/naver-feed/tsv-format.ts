@@ -17,7 +17,7 @@ class TSVFormat {
   	customColor,
 	}): string {
   	return `${mainName} ${this._gender} ${fetchingCategoryName} `
-			+ `${itemName}${this.color(customColor)}`
+			+ `${itemName} ${this.color(customColor)}`.trim()
 	}
 
 	public pcLink({ cafe24PCAddress }) {
