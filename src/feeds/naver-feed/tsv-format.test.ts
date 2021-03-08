@@ -43,17 +43,31 @@ describe('TSVFormat', () => {
 		})
 	})
 
-	describe('link', () => {
+	describe('pcLink', () => {
 		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W' })
 		const givenID: number = 1
     
 		it('returns cafe24 link', () => {
-			const link = tsvFormat.link({
+			const link = tsvFormat.pcLink({
 				id: givenID,
-				cafe24AddressPrefix: constants.cafe24AddressPrefix(),
+				cafe24PCAddress: constants.cafe24PCAddress(),
 			})
 
-			expect(link).toBe(`${constants.cafe24AddressPrefix()}${givenID}`)
+			expect(link).toBe(`${constants.cafe24PCAddress()}${givenID}`)
+		})
+	})
+
+	describe('mobileLink', () => {
+		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W' })
+		const givenID: number = 1
+    
+		it('returns cafe24 link', () => {
+			const link = tsvFormat.mobileLink({
+				id: givenID,
+				cafe24MobileAddress: constants.cafe24MobileAddress(),
+			})
+
+			expect(link).toBe(`${constants.cafe24MobileAddress()}${givenID}`)
 		})
 	})
 })

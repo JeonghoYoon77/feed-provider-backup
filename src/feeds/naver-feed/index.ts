@@ -38,7 +38,6 @@ export class NaverFeed implements iFeed {
 				ip.final_price AS 'ip_final_price'
 				iop.final_price AS 'iop_final_price'
 
-				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'link',
 				CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'mobile_link',
 				ii.image_url AS 'image_link',
 				(
@@ -187,9 +186,13 @@ export class NaverFeed implements iFeed {
 				itemName: row.item_name,
 				customColor: row.custom_color,
 			})
-			const link: string = tsvFormat.link({
+			const pcLink: string = tsvFormat.pcLink({
 				id: row.id,
-				cafe24AddressPrefix: constants.cafe24AddressPrefix(),
+				cafe24PCAddress: constants.cafe24PCAddress(),
+			})
+			const mobileLink: string = tsvFormat.mobileLink({
+				id: row.id,
+				cafe24MobileAddress: constants.cafe24MobileAddress(),
 			})
 
 			return {
@@ -198,7 +201,8 @@ export class NaverFeed implements iFeed {
 				'price_pc': row.ip_final_price,
 				'price_mobile': row.ip_final_price,
 				'normal_price': row.iop_final_price,
-				link,
+				link: pcLink,
+				'mobile_link': mobileLink,
 			}
 		})
 

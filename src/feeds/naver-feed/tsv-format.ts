@@ -24,8 +24,12 @@ class TSVFormat {
 			+ `${itemName}${color}`
   }
 
-  link({ id, cafe24AddressPrefix }) {
-  	return `${cafe24AddressPrefix}${id}`
+  pcLink({ id, cafe24PCAddress }) {
+  	return `${cafe24PCAddress}${id}`
+  }
+
+  mobileLink({ id, cafe24MobileAddress }) {
+  	return `${cafe24MobileAddress}${id}`
   }
 }
 
