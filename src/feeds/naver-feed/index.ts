@@ -1,9 +1,8 @@
-import { iFeed } from './feed'
-import { MySQL } from '../utils'
+import { iFeed } from '../feed'
+import { MySQL } from '../../utils'
 import { parse } from 'json2csv'
-import { S3Client } from '../utils'
-
-const LIMIT = 99999
+import { S3Client } from '../../utils'
+import Constants from './constants'
 
 export class NaverFeed implements iFeed {
 	async upload() {
@@ -22,6 +21,8 @@ export class NaverFeed implements iFeed {
 	}
 
 	async getTsv() {
+		const constants = new Constants()
+
 		const query = `
 			SELECT
 				cud.product_no AS 'id',
@@ -166,7 +167,7 @@ export class NaverFeed implements iFeed {
 				), 1, 0)
 				) DESC,
 				si.priority DESC
-			LIMIT ${LIMIT}
+			LIMIT ${constants.limit()}
 		`
 		const data = await MySQL.execute(query)
 
