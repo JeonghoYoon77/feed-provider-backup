@@ -181,11 +181,15 @@ export class NaverFeed implements iFeed {
 
 		const tsvData = data.map((row: any): TSVData => {
 			const tsvFormat = new TSVFormat(row.item_gender)
-			const title = tsvFormat.title({
+			const title: string = tsvFormat.title({
 				mainName: row.main_name,
 				fetchingCategoryName: row.fetching_category_name,
 				itemName: row.item_name,
 				customColor: row.custom_color,
+			})
+			const link: string = tsvFormat.link({
+				id: row.id,
+				cafe24AddressPrefix: constants.cafe24AddressPrefix(),
 			})
 
 			return {
@@ -194,6 +198,7 @@ export class NaverFeed implements iFeed {
 				'price_pc': row.ip_final_price,
 				'price_mobile': row.ip_final_price,
 				'normal_price': row.iop_final_price,
+				link,
 			}
 		})
 

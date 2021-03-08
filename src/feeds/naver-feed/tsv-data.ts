@@ -4,6 +4,7 @@ type TSVData = {
   'price_pc': number
   'price_mobile': number
   'normal_price': number
+  link: string
 }
 
 export default TSVData

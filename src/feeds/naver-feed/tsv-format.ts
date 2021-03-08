@@ -2,6 +2,7 @@ import { isEmpty } from 'lodash'
 
 class TSVFormat {
   private gender: string
+	
 
   constructor({ itemGender }) {
   	this.gender = itemGender === 'W' ? '여성' : '남성'
@@ -21,6 +22,10 @@ class TSVFormat {
 
   	return `${mainName} ${this.gender} ${fetchingCategoryName} `
 			+ `${itemName}${color}`
+  }
+
+  link({ id, cafe24AddressPrefix }) {
+  	return `${cafe24AddressPrefix}${id}`
   }
 }
 
