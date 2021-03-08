@@ -3,6 +3,7 @@ import { MySQL } from '../../utils'
 import { parse } from 'json2csv'
 import { S3Client } from '../../utils'
 import Constants from './constants'
+import TSVFormat from './tsv-format'
 
 export class NaverFeed implements iFeed {
 	async upload() {
@@ -26,20 +27,13 @@ export class NaverFeed implements iFeed {
 		const query = `
 			SELECT
 				cud.product_no AS 'id',
-				REPLACE(
-					REPLACE(
-						CONCAT_WS(
-							' ',
-							bi.main_name,
-							IF(
-								ii.item_gender = 'W', '여성', '남성'
-							),
-							fc.fetching_category_name,
-							ii.item_name,
-							ii.color
-						), '\n', ''
-					), '\t', ''
-				) AS 'title',
+				
+				bi.main_name,
+				ii.item_gender,
+				fc.fetching_category_name,
+				ii.item_name,
+				ii.custom_color,
+				
 				ip.final_price AS 'price_pc',
 				ip.final_price AS 'price_mobile',
 				iop.final_price AS 'normal_price',
@@ -184,8 +178,23 @@ export class NaverFeed implements iFeed {
 		`
 		const data = await MySQL.execute(query)
 
-		return parse(data, {
-			fields: Object.keys(data[0]),
+		const tsvData = data.map((row: any) => {
+			const tsvFormat = new TSVFormat(row.item_gender)
+			const title = tsvFormat.title({
+				mainName: row.main_name,
+				fetchingCategoryName: row.fetching_category_name,
+				itemName: row.item_name,
+				customColor: row.custom_color,
+			})
+
+			return {
+				id: row.id,
+				title,
+			}
+		})
+
+		return parse(tsvData, {
+			fields: Object.keys(tsvData[0]),
 			delimiter: '\t',
 			quote: '',
 		})
