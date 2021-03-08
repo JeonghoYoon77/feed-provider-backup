@@ -1,36 +1,44 @@
 import { isEmpty } from 'lodash'
 
 class TSVFormat {
-  private gender: string
+  private _gender: string
+	private _id: number | string
 	
 
-  constructor({ itemGender }) {
-  	this.gender = itemGender === 'W' ? '여성' : '남성'
-  }
+	constructor({ itemGender, id }) {
+  	this._gender = itemGender === 'W' ? '여성' : '남성'
+		this._id = id
+	}
   
-  title({
+	public title({
   	mainName,
   	fetchingCategoryName,
   	itemName,
   	customColor,
-  }): string {
-  	const color = isEmpty(customColor)
-  		? ''
-  		: ' ' + customColor
-  			.replace(/[^a-zA-Z]/gi, ' ')
-  			.toUpperCase()
+	}): string {
+  	return `${mainName} ${this._gender} ${fetchingCategoryName} `
+			+ `${itemName}${this.color(customColor)}`
+	}
 
-  	return `${mainName} ${this.gender} ${fetchingCategoryName} `
-			+ `${itemName}${color}`
-  }
+	public pcLink({ cafe24PCAddress }) {
+  	return `${cafe24PCAddress}${this._id}`
+	}
 
-  pcLink({ id, cafe24PCAddress }) {
-  	return `${cafe24PCAddress}${id}`
-  }
+	public mobileLink({ cafe24MobileAddress }) {
+  	return `${cafe24MobileAddress}${this._id}`
+	}
 
-  mobileLink({ id, cafe24MobileAddress }) {
-  	return `${cafe24MobileAddress}${id}`
-  }
+	public gender() {
+  	return this._gender
+	}
+
+	private color(customColor: string) {
+		return isEmpty(customColor)
+			? ''
+			: ' ' + customColor
+				.replace(/[^a-zA-Z]/gi, ' ')
+				.toUpperCase()
+	}
 }
 
 export default TSVFormat

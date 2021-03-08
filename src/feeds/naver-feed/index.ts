@@ -35,10 +35,9 @@ export class NaverFeed implements iFeed {
 				ii.item_name,
 				ii.custom_color,
 				
-				ip.final_price AS 'ip_final_price'
-				iop.final_price AS 'iop_final_price'
+				ip.final_price AS 'ip_final_price',
+				iop.final_price AS 'iop_final_price',
 
-				CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no) AS 'mobile_link',
 				ii.image_url AS 'image_link',
 				(
 					SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
@@ -78,17 +77,11 @@ export class NaverFeed implements iFeed {
 					ORDER BY icm.fetching_category_id DESC
 					LIMIT 1
 				) AS 'naver_category',
-				'신상품' AS 'condition',
-				bi.main_name AS 'brand_name',
-				'100% 정품, 관부가세 포함, 기한한정 세일!' AS 'event_words',
-				0 AS 'shipping',
 				(
 					SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', CEIL((ip.final_price + IFNULL(i.optional_price, 0)) * 0.97 / 100) * 100) SEPARATOR '|'), ',', 10)
 					FROM item_size i
 					WHERE i.item_id = ii.idx
 				) AS 'option_detail',
-				IF(ii.item_gender = 'M', '남성', '여성') AS 'gender',
-				'Y' AS 'includes_vat',
 				REPLACE(CONCAT_WS('|',
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
 					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.main_name, fc.fetching_category_name),
@@ -179,7 +172,10 @@ export class NaverFeed implements iFeed {
 		const data = await MySQL.execute(query)
 
 		const tsvData = data.map((row: any): TSVData => {
-			const tsvFormat = new TSVFormat(row.item_gender)
+			const tsvFormat = new TSVFormat({
+				itemGender: row.item_gender,
+				id: row.id,
+			})
 			const title: string = tsvFormat.title({
 				mainName: row.main_name,
 				fetchingCategoryName: row.fetching_category_name,
@@ -187,11 +183,9 @@ export class NaverFeed implements iFeed {
 				customColor: row.custom_color,
 			})
 			const pcLink: string = tsvFormat.pcLink({
-				id: row.id,
 				cafe24PCAddress: constants.cafe24PCAddress(),
 			})
 			const mobileLink: string = tsvFormat.mobileLink({
-				id: row.id,
 				cafe24MobileAddress: constants.cafe24MobileAddress(),
 			})
 
@@ -203,6 +197,20 @@ export class NaverFeed implements iFeed {
 				'normal_price': row.iop_final_price,
 				link: pcLink,
 				'mobile_link': mobileLink,
+				'image_link': row.image_link,
+				'add_image_link': row.add_image_link,
+				'category_name1': row.category_name1,
+				'category_name2': row.category_name2,
+				'category_name3': row.category_name3,
+				'naver_category': row.naver_category,
+				condition: constants.condition(),
+				'brand_name': row.main_name,
+				'event_words': constants.eventWords(),
+				shipping: constants.shipping(),
+				'option_detail': row.option_detail,
+				gender: tsvFormat.gender(),
+				'includes_vat': constants.includesVat(),
+				'search_tag': row.search_tag,
 			}
 		})
 

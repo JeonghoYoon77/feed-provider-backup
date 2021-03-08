@@ -5,6 +5,7 @@ const context = describe
 
 describe('TSVFormat', () => {
 	const constants = new Constants()
+	const givenID: number = 1
 	const givenMainName: string = '스톤아일랜드'
 	const givenFetchingCategoryName: string = '자켓'
 	const givenItemName: string = '멤브라나 3L 더스트 후드 아노락'
@@ -12,7 +13,7 @@ describe('TSVFormat', () => {
 	describe('title', () => {
 		context('when gender is men and without custom color', () => {
 			const givenCustomColor: string = ''
-			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'M' })
+			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'M', id: givenID })
   
 			it('returns includes text "남성"', () => {
 				const title = tsvFormat.title({
@@ -28,7 +29,7 @@ describe('TSVFormat', () => {
   
 		context('when gender is women and with custom color', () => {
 			const givenCustomColor: string = 'dark_green'
-			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W' })
+			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID })
   
 			it('returns includes text "여성" and with color', () => {
 				const title = tsvFormat.title({
@@ -44,12 +45,10 @@ describe('TSVFormat', () => {
 	})
 
 	describe('pcLink', () => {
-		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W' })
-		const givenID: number = 1
+		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID })
     
 		it('returns cafe24 link', () => {
 			const link = tsvFormat.pcLink({
-				id: givenID,
 				cafe24PCAddress: constants.cafe24PCAddress(),
 			})
 
@@ -58,12 +57,10 @@ describe('TSVFormat', () => {
 	})
 
 	describe('mobileLink', () => {
-		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W' })
-		const givenID: number = 1
+		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID })
     
 		it('returns cafe24 link', () => {
 			const link = tsvFormat.mobileLink({
-				id: givenID,
 				cafe24MobileAddress: constants.cafe24MobileAddress(),
 			})
 
