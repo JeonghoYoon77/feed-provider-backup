@@ -16,6 +16,7 @@ type TSVData = {
   'brand_name': string
   'event_words': string
   shipping: number
+  'import_flag': string
   'option_detail': string
   gender: string
   'includes_vat': string

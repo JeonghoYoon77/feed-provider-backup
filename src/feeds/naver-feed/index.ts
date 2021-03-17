@@ -27,8 +27,8 @@ export class NaverFeed implements iFeed {
 	}
 
 	async getTsv(): Promise<string> {
-		const data = await MySQL.execute(this.query())
-		const tsvData: TSVData[] = data.map(this.makeRow)
+		const data = await MySQL.execute(NaverFeed.query())
+		const tsvData: TSVData[] = data.map(NaverFeed.makeRow)
 
 		return parse(tsvData, {
 			fields: Object.keys(tsvData[0]),
@@ -37,7 +37,7 @@ export class NaverFeed implements iFeed {
 		})
 	}
 
-	private query(): string {
+	private static query(): string {
 		return format(`
 			SELECT
 				cud.product_no AS 'id',
@@ -184,7 +184,7 @@ export class NaverFeed implements iFeed {
 		`, [constants.limit()])
 	}
 
-	private makeRow(row): TSVData {
+	private static makeRow(row): TSVData {
 		const tsvFormat = new TSVFormat({
 			itemGender: row.item_gender,
 			id: row.id,
@@ -220,6 +220,7 @@ export class NaverFeed implements iFeed {
 			'brand_name': row.main_name,
 			'event_words': constants.eventWords(),
 			shipping: constants.shipping(),
+			'import_flag': constants.importFlag(),
 			'option_detail': row.option_detail,
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
