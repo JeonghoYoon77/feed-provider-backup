@@ -4,7 +4,6 @@ class Constants {
   private _cafe24MobileAddress: string = 'https://m.fetching.co.kr/product/detail.html?product_no='
   private _condition: string = '신상품'
   private _shipping: number = 0
-  private _importFlag: string = 'Y'
   private _includesVat: string = 'Y'
   private _eventWords: string = '100% 정품, 관부가세 포함, 기한한정 세일!'
 
@@ -26,10 +25,6 @@ class Constants {
 
   public shipping(): number {
   	return this._shipping
-  }
-
-  public importFlag(): string {
-  	return this._importFlag
   }
 
   public includesVat(): string {

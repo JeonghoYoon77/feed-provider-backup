@@ -118,7 +118,8 @@ export class NaverFeed implements iFeed {
 						LIMIT 1
 						OFFSET 2
 					)
-				), '\t', ' ') AS 'search_tag'
+				), '\t', ' ') AS 'search_tag',
+				IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM cafe24_upload_list cul
 			JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			JOIN item_info ii on cud.item_id = ii.idx
@@ -135,8 +136,9 @@ export class NaverFeed implements iFeed {
 				ORDER BY fc.idx DESC
 				LIMIT 1
 			) = fc.idx
-            WHERE ii.is_verify = 1
-              AND cul.is_naver_upload = 1
+			LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx 
+      WHERE ii.is_verify = 1
+        AND cul.is_naver_upload = 1
 			ORDER BY (
 				# 상품 우선 순위
 				(ii.item_priority > 0) * 1000
