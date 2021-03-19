@@ -222,7 +222,7 @@ export class NaverFeed implements iFeed {
 			'brand_name': row.main_name,
 			'event_words': constants.eventWords(),
 			shipping: constants.shipping(),
-			'import_flag': constants.importFlag(),
+			'import_flag': row.import_flag,
 			'option_detail': row.option_detail,
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
