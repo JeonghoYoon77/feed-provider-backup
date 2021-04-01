@@ -3,21 +3,16 @@ import { isEmpty } from 'lodash'
 class TSVFormat {
   private _gender: string
 	private _id: number | string
-	
+
 
 	constructor({ itemGender, id }) {
   	this._gender = itemGender === 'W' ? '여성' : '남성'
 		this._id = id
 	}
-  
-	public title({
-  	mainName,
-  	fetchingCategoryName,
-  	itemName,
-  	customColor,
-	}): string {
+
+	public title({ mainName, fetchingCategoryName, itemName, customColor, mpn = '' }): string {
   	return `${mainName} ${this._gender} ${fetchingCategoryName} `
-			+ `${itemName} ${this.color(customColor)}`.trim()
+			+ `${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
 	}
 
 	public pcLink({ cafe24PCAddress }) {

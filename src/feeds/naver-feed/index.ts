@@ -39,105 +39,104 @@ export class NaverFeed implements iFeed {
 
 	private static query(): string {
 		return format(`
-			SELECT
-				cud.product_no AS 'id',
+			SELECT cud.product_no AS 'id',
 				
-				bi.main_name,
-				ii.item_gender,
-				fc.fetching_category_name,
-				ii.item_name,
-				ii.custom_color,
+			       bi.main_name,
+			       ii.item_gender,
+			       fc.fetching_category_name,
+			       ii.item_name,
+			       ii.custom_color,
+			       idsi.designer_style_id,
 				
-				ip.final_price AS 'ip_final_price',
-				iop.final_price AS 'iop_final_price',
+			       ip.final_price AS 'ip_final_price',
+			       iop.final_price AS 'iop_final_price',
 
-				ii.image_url AS 'image_link',
-				(
-					SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
-					FROM item_image ig
-					WHERE ig.item_id = ii.idx
-					ORDER BY ig.priority ASC
-				) AS 'add_image_link',
-				(
-					SELECT fc.fetching_category_name
-					FROM fetching_category fc
-					JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-					WHERE icm.item_id = ii.idx
-						AND fc.fetching_category_depth = 0
-					LIMIT 1
-				) AS 'category_name1',
-				(
-					SELECT fc.fetching_category_name
-					FROM fetching_category fc
-					JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-					WHERE icm.item_id = ii.idx
-						AND fc.fetching_category_depth = 1
-					LIMIT 1
-				) AS 'category_name2',
-				(
-					SELECT fc.fetching_category_name
-					FROM fetching_category fc
-					JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-					WHERE icm.item_id = ii.idx
-						AND fc.fetching_category_depth = 2
-					LIMIT 1
-				) AS 'category_name3',
-				(
-					SELECT fc.smartstore_category_id
-					FROM fetching_category fc
-					JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-					WHERE icm.item_id = ii.idx
-					ORDER BY icm.fetching_category_id DESC
-					LIMIT 1
-				) AS 'naver_category',
-				(
-					SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', CEIL((ip.final_price + IFNULL(i.optional_price, 0)) * 0.97 / 100) * 100) SEPARATOR '|'), ',', 10)
-					FROM item_size i
-					WHERE i.item_id = ii.idx
-				) AS 'option_detail',
-				REPLACE(CONCAT_WS('|',
-					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
-					CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.main_name, fc.fetching_category_name),
-					(
-						SELECT bsi.semi_name
-						FROM brand_semi_name bsi
-						WHERE bsi.brand_id = bi.brand_id
-						LIMIT 1
-					),
-					(
-						SELECT bsi.semi_name
-						FROM brand_semi_name bsi
-						WHERE bsi.brand_id = bi.brand_id
-						LIMIT 1
-						OFFSET 1
-					),
-					(
-						SELECT bsi.semi_name
-						FROM brand_semi_name bsi
-						WHERE bsi.brand_id = bi.brand_id
-						LIMIT 1
-						OFFSET 2
-					)
-				), '\t', ' ') AS 'search_tag',
-				IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
+			       ii.image_url AS 'image_link',
+			       (
+			           SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
+			           FROM item_image ig
+			           WHERE ig.item_id = ii.idx
+			           ORDER BY ig.priority ASC
+			       ) AS 'add_image_link',
+			       (
+			           SELECT fc.fetching_category_name
+			           FROM fetching_category fc
+			               JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+			           WHERE icm.item_id = ii.idx
+			             AND fc.fetching_category_depth = 0
+			           LIMIT 1
+			       ) AS 'category_name1',
+			       (
+			           SELECT fc.fetching_category_name
+			           FROM fetching_category fc
+			               JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+			           WHERE icm.item_id = ii.idx
+			             AND fc.fetching_category_depth = 1
+			           LIMIT 1
+			       ) AS 'category_name2',
+			       (
+			           SELECT fc.fetching_category_name
+			           FROM fetching_category fc
+			               JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+			           WHERE icm.item_id = ii.idx
+			             AND fc.fetching_category_depth = 2
+			           LIMIT 1
+			       ) AS 'category_name3',
+			       (
+			           SELECT fc.smartstore_category_id
+			           FROM fetching_category fc
+			               JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+			           WHERE icm.item_id = ii.idx
+			           ORDER BY icm.fetching_category_id DESC
+			           LIMIT 1
+			       ) AS 'naver_category',
+			       (
+			           SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', CEIL((ip.final_price + IFNULL(i.optional_price, 0)) * 0.97 / 100) * 100) SEPARATOR '|'), ',', 10)
+			           FROM item_size i
+			           WHERE i.item_id = ii.idx
+			       ) AS 'option_detail',
+			       REPLACE(CONCAT_WS('|',
+			           CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
+			           CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.main_name, fc.fetching_category_name),
+			           (
+			               SELECT bsi.semi_name
+			               FROM brand_semi_name bsi
+			               WHERE bsi.brand_id = bi.brand_id
+			               LIMIT 1
+			           ),
+			           (
+			               SELECT bsi.semi_name
+			               FROM brand_semi_name bsi
+			               WHERE bsi.brand_id = bi.brand_id
+			               LIMIT 1 OFFSET 1
+			           ),
+			           (
+			               SELECT bsi.semi_name
+			               FROM brand_semi_name bsi
+			               WHERE bsi.brand_id = bi.brand_id
+			               LIMIT 1 OFFSET 2
+			      		 )
+			       ), '\t', ' ') AS 'search_tag',
+			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM cafe24_upload_list cul
-			JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
-			JOIN item_info ii on cud.item_id = ii.idx
-            JOIN shop_info si on ii.shop_id = si.shop_id
-			JOIN brand_info bi on ii.brand_id = bi.brand_id
-			JOIN item_price ip on ii.idx = ip.item_id
-			JOIN item_origin_price iop on ii.idx = iop.item_id
-			JOIN fetching_category fc on (
-				SELECT icm.fetching_category_id
-				FROM fetching_category fc
-				JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-				WHERE icm.item_id = ii.idx
-					AND fc.fetching_category_name != '기타'
-				ORDER BY fc.idx DESC
-				LIMIT 1
-			) = fc.idx
-			LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx 
-      WHERE ii.is_verify = 1
+			    JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
+			    JOIN item_info ii on cud.item_id = ii.idx
+			    JOIN shop_info si on ii.shop_id = si.shop_id
+			    JOIN brand_info bi on ii.brand_id = bi.brand_id
+			    JOIN item_price ip on ii.idx = ip.item_id
+			    JOIN item_origin_price iop on ii.idx = iop.item_id
+			    JOIN fetching_category fc on (
+			        SELECT icm.fetching_category_id
+			        FROM fetching_category fc
+			            JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+			        WHERE icm.item_id = ii.idx
+			          AND fc.fetching_category_name != '기타'
+			        ORDER BY fc.idx DESC
+			        LIMIT 1
+			  	) = fc.idx
+			    LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx
+			    LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
+			WHERE ii.is_verify = 1
         AND cul.is_naver_upload = 1
 			ORDER BY (
 				# 상품 우선 순위
@@ -196,6 +195,7 @@ export class NaverFeed implements iFeed {
 			fetchingCategoryName: row.fetching_category_name,
 			itemName: row.item_name,
 			customColor: row.custom_color,
+			mpn: row.designer_style_id,
 		})
 		const pcLink: string = tsvFormat.pcLink({
 			cafe24PCAddress: constants.cafe24PCAddress(),
