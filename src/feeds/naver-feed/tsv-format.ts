@@ -3,16 +3,18 @@ import { isEmpty } from 'lodash'
 import {MySQL} from '../../utils'
 
 const semiNamePromise = MySQL.execute(`
-	SELECT semi_name AS semiName,
+	SELECT fc.fetching_category_name AS categoryName,
+	       semi_name AS semiName,
 	       woman_category IS NOT NULL AS woman,
 	       man_category IS NOT NULL AS man
-	FROM category_semi_name
+	FROM category_semi_name csn
+	    JOIN fetching_category fc on csn.man_category = fc.idx OR csn.man_category = fc.idx
 `)
 
 class TSVFormat {
   private readonly _gender: string
 	private readonly _id: number | string
-	private static _semiNames: { semiName: string, woman: boolean, man: boolean }[]
+	private static _semiNames: { categoryName: string, semiName: string, woman: boolean, man: boolean }[]
 
 
 	constructor({ itemGender, id }) {
@@ -24,7 +26,7 @@ class TSVFormat {
   	if (!TSVFormat._semiNames) TSVFormat._semiNames = (await semiNamePromise)
 
 		if (TSVFormat._semiNames.filter(name => itemName.includes(name)).length) {
-			console.log(TSVFormat._semiNames.filter(name => itemName.includes(name.semiName) && (this._gender === '남성' ? name.man : name.woman)))
+			console.log(TSVFormat._semiNames.filter(name => itemName.includes(name.semiName) && fetchingCategoryName === name.categoryName))
 			return `${mainName} ${this._gender} ${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
 		}
   	return `${mainName} ${this._gender} ${fetchingCategoryName} `
