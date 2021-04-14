@@ -28,7 +28,7 @@ export class NaverFeed implements iFeed {
 
 	async getTsv(): Promise<string> {
 		const data = await MySQL.execute(NaverFeed.query())
-		const tsvData: TSVData[] = data.map(NaverFeed.makeRow)
+		const tsvData: TSVData[] = await Promise.all(data.map(NaverFeed.makeRow))
 
 		return parse(tsvData, {
 			fields: Object.keys(tsvData[0]),
@@ -185,12 +185,12 @@ export class NaverFeed implements iFeed {
 		`, [constants.limit()])
 	}
 
-	private static makeRow(row): TSVData {
+	private static async makeRow(row): Promise<TSVData> {
 		const tsvFormat = new TSVFormat({
 			itemGender: row.item_gender,
 			id: row.id,
 		})
-		const title: string = tsvFormat.title({
+		const title: string = await tsvFormat.title({
 			mainName: row.main_name,
 			fetchingCategoryName: row.fetching_category_name,
 			itemName: row.item_name,
