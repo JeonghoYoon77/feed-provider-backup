@@ -13,7 +13,7 @@ describe('TSVFormat', () => {
 	describe('title', () => {
 		context('when gender is men and without custom color', () => {
 			const givenCustomColor: string = ''
-			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'M', id: givenID })
+			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'M', id: givenID, shopId: 107 })
 
 			it('returns includes text "남성"', async () => {
 				const title = await tsvFormat.title({
@@ -29,7 +29,7 @@ describe('TSVFormat', () => {
 
 		context('when gender is women and with custom color', () => {
 			const givenCustomColor: string = 'dark_green'
-			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID })
+			const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID, shopId: 107 })
 
 			it('returns includes text "여성" and with color', async () => {
 				const title = await tsvFormat.title({
@@ -45,7 +45,7 @@ describe('TSVFormat', () => {
 	})
 
 	describe('pcLink', () => {
-		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID })
+		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID, shopId: 2 })
 
 		it('returns cafe24 link', () => {
 			const link = tsvFormat.pcLink({
@@ -57,7 +57,7 @@ describe('TSVFormat', () => {
 	})
 
 	describe('mobileLink', () => {
-		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID })
+		const tsvFormat: TSVFormat = new TSVFormat({ itemGender: 'W', id: givenID, shopId: 2 })
 
 		it('returns cafe24 link', () => {
 			const link = tsvFormat.mobileLink({
