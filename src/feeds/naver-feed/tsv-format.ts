@@ -29,11 +29,15 @@ class TSVFormat {
   		TSVFormat._semiNames = (await semiNamePromise)
 		}
 
+  	let title
 		if ([2, 3, 7, 8, 42, 61, 62].includes(this._shopId) || TSVFormat._semiNames.filter(name => itemName.includes(name.semiName) && fetchingCategoryName.includes(name.categoryName)).length) {
-			return `${mainName} ${this._gender} ${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
+			title = `${mainName} ${this._gender} ${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
+		} else {
+			title = `${mainName} ${this._gender} ${fetchingCategoryName} `
+				+ `${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
 		}
-  	return `${mainName} ${this._gender} ${fetchingCategoryName} `
-			+ `${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
+
+		return title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
 	}
 
 	public pcLink({ cafe24PCAddress }) {
