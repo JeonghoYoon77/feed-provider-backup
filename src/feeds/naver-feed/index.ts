@@ -190,7 +190,7 @@ export class NaverFeed implements iFeed {
 		const tsvFormat = new TSVFormat({
 			itemGender: row.item_gender,
 			id: row.id,
-			shopId: row.shopId,
+			shopId: row.shop_id,
 		})
 		const title: string = await tsvFormat.title({
 			mainName: row.main_name,
