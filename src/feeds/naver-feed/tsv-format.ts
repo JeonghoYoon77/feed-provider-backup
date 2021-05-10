@@ -5,10 +5,9 @@ import {MySQL} from '../../utils'
 const semiNamePromise = MySQL.execute(`
 	SELECT DISTINCT fc.fetching_category_name AS categoryName,
 									semi_name AS semiName,
-									woman_category IS NOT NULL AS woman,
-									man_category IS NOT NULL AS man
+									category
 	FROM category_semi_name csn
-	    JOIN fetching_category fc on csn.man_category = fc.idx OR csn.woman_category = fc.idx
+	    JOIN fetching_category fc on csn.category = fc.idx
 `)
 
 class TSVFormat {
