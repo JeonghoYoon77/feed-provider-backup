@@ -122,10 +122,12 @@ export class NaverFeed implements iFeed {
 			FROM cafe24_upload_list cul
 			    JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			    JOIN item_info ii on cud.item_id = ii.idx
+					JOIN item_show_price isp on ii.idx = isp.item_id
 			    JOIN shop_info si on ii.shop_id = si.shop_id
 			    JOIN brand_info bi on ii.brand_id = bi.brand_id
-			    JOIN item_price ip on ii.idx = ip.item_id
+			    JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
 			    JOIN item_origin_price iop on ii.idx = iop.item_id
+					JOIN item_score score on ii.idx = score.item_id
 			    JOIN fetching_category fc on (
 			        SELECT icm.fetching_category_id
 			        FROM fetching_category fc
@@ -139,49 +141,9 @@ export class NaverFeed implements iFeed {
 			    LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
 			WHERE ii.is_verify = 1
         AND cul.is_naver_upload = 1
-			ORDER BY (
-				# 상품 우선 순위
-				(ii.item_priority > 0) * 1000
-				# 프로모션 우선 순위
-				+ if(exists((
-					SELECT spm.item_id
-					FROM shop_promotion_map spm
-						JOIN shop_promotions sp on spm.shop_promotion_id = sp.id
-					WHERE spm.item_id = ii.idx
-					  AND (
-						  (CURRENT_TIMESTAMP > sp.started_at OR sp.started_at is NULL)
-							  AND
-						  (CURRENT_TIMESTAMP < sp.ended_at OR sp.ended_at is NULL)
-					  )
-					  AND sp.is_active
-					LIMIT 1
-				)), 5, 0)
-				# 자체 할인 우선 순위
-				+ if(ip.discount_rate >= 0.1, 1, 0)
-				# 카테고리 우선 순위
-				+ fc.priority
-				# 카테고리 별 주요 브랜드 우선순위
-				+ if(ii.idx IN (
-					SELECT ii.idx
-					FROM item_info as ii
-						JOIN item_category_map icm ON ii.idx = icm.item_id
-						JOIN important_brands_of_fetching_categories fcib
-							ON icm.fetching_category_id = fcib.category_id AND
-							   ii.brand_id = fcib.brand_id
-						JOIN item_price ip ON ii.idx = ip.item_id AND ip.fixed_rate > 0
-				), 1, 0)
-				# 브랜드 우선 순위
-				+ if(ii.idx IN (
-					SELECT DISTINCT (ii.idx) AS idx
-					FROM item_info AS ii,
-						 item_category_map AS icm,
-						 important_brands_of_fetching_categories AS fcib
-					WHERE ii.idx = icm.item_id
-					  AND icm.fetching_category_id = fcib.category_id
-					  AND fcib.brand_id = ii.brand_id
-				), 1, 0)
-				) DESC,
-				si.priority DESC
+			ORDER BY ii.item_priority > 0 DESC,
+							 score.naver_feed_score DESC,
+							 si.priority DESC
 			LIMIT ?
 		`, [constants.limit()])
 	}
