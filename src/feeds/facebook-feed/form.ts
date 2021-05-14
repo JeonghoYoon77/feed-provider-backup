@@ -14,37 +14,37 @@ export class Form {
   private image_link: string;
   private brand: string;
 
-	constructor(
-		id: number,
-		title: string,
-		description: string,
-		price: number,
-		productNo: number,
-		image_link: string,
-		brand: string,
-	) {
-		this.id = id
-		this.title = title
-		this.description = description
-		this.price = price
-		this.productNo = productNo
-		this.image_link = image_link
-		this.brand = brand
-	}
+  constructor(
+  	id: number,
+  	title: string,
+  	description: string,
+  	price: number,
+  	productNo: number,
+  	image_link: string,
+  	brand: string,
+  ) {
+  	this.id = id
+  	this.title = title
+  	this.description = description
+  	this.price = price
+  	this.productNo = productNo
+  	this.image_link = image_link
+  	this.brand = brand
+  }
 
-	toObject() {
-		return {
-			id: this.id,
-			title: capitalize(this.title),
-			description: isEmpty(this.description) ? this.title : this.description,
-			availability: this.availability,
-			condition: this.condition,
-			price: `${this.price}${this.currency}`,
-			link: `${this.linkPrefix}${this.productNo}`,
-			image_link: this.image_link,
-			brand: this.brand,
-		}
-	}
+  toObject() {
+  	return {
+  		id: this.id,
+  		title: capitalize(this.title),
+  		description: isEmpty(this.description) ? this.title : this.description,
+  		availability: this.availability,
+  		condition: this.condition,
+  		price: `${this.price}${this.currency}`,
+  		link: `${this.linkPrefix}${this.productNo}`,
+  		image_link: this.image_link,
+  		brand: this.brand,
+  	}
+  }
 }
 
 function Format(rows: RowDataPacket[]): Form[] {
