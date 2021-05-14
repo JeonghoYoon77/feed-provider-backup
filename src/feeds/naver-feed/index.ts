@@ -167,12 +167,13 @@ export class NaverFeed implements iFeed {
 		const mobileLink: string = tsvFormat.mobileLink({
 			cafe24MobileAddress: constants.cafe24MobileAddress(),
 		})
+		const price: number = (row.ip_final_price * 0.97) - 10000
 
 		return {
 			id: row.id,
 			title,
-			'price_pc': row.ip_final_price,
-			'price_mobile': row.ip_final_price,
+			'price_pc': price,
+			'price_mobile': price,
 			'normal_price': row.iop_final_price,
 			link: pcLink,
 			'mobile_link': mobileLink,
