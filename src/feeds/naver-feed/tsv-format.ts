@@ -1,20 +1,9 @@
 import { isEmpty } from 'lodash'
 
-import {MySQL} from '../../utils'
-
-const semiNamePromise = MySQL.execute(`
-	SELECT DISTINCT fc.fetching_category_name AS categoryName,
-									semi_name AS semiName,
-									category
-	FROM category_semi_name csn
-	    JOIN fetching_category fc on csn.category = fc.idx
-`)
-
 class TSVFormat {
   private readonly _gender: string
 	private readonly _id: number | string
 	private readonly _shopId: number
-	private static _semiNames: { categoryName: string, semiName: string, woman: boolean, man: boolean }[]
 
 
 	constructor({ itemGender, id, shopId }) {
@@ -23,18 +12,10 @@ class TSVFormat {
 		this._shopId = shopId
 	}
 
-	public async title({ mainName, fetchingCategoryName, itemName, customColor, mpn = '' }): Promise<string> {
-  	if (!TSVFormat._semiNames?.length) {
-  		TSVFormat._semiNames = (await semiNamePromise)
-		}
+	public async title({ mainName, itemName, customColor, mpn = '' }): Promise<string> {
+  	let title = `${mainName} ${this._gender} ${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
 
-  	let title
-		if ([2, 3, 7, 8, 42, 61, 62].includes(this._shopId) || TSVFormat._semiNames.filter(name => itemName.includes(name.semiName) && fetchingCategoryName.includes(name.categoryName)).length) {
-			title = `${mainName} ${this._gender} ${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
-		} else {
-			title = `${mainName} ${this._gender} ${fetchingCategoryName} `
-				+ `${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
-		}
+		title.replace('é', '')
 
 		return title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
 	}
@@ -58,6 +39,21 @@ class TSVFormat {
 				.replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ')
 				.toUpperCase()
 				.trim()
+	}
+
+	public searchTag({itemName, brandMainName, categoryName2, categoryName3}) {
+  	const tags = [
+  		`${brandMainName}${itemName}`,
+			`${brandMainName}${this._gender}${categoryName3}`,
+			`${brandMainName}${this._gender}${categoryName2}`,
+			`${brandMainName}${categoryName3}`,
+			`${brandMainName}${categoryName2}`,
+			`${this._gender}명품${categoryName3}`,
+			`${this._gender}명품${categoryName2}`,
+			`${this._gender}${categoryName3}`,
+			`${this._gender}${categoryName2}`,
+		]
+		return tags.join('|').split(' ').join('')
 	}
 }
 

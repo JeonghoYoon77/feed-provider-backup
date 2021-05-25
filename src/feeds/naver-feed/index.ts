@@ -46,15 +46,19 @@ export class NaverFeed implements iFeed {
 			       ii.item_gender,
 			       fc.fetching_category_name,
 			       ii.item_name,
+			       ii.origin_name,
 			       ii.custom_color,
 			       idsi.designer_style_id,
+						 inpi.naver_product_id,
+			       
+			       ci.country_name,
 				
 			       ip.final_price AS 'ip_final_price',
 			       iop.final_price AS 'iop_final_price',
 
 			       ii.image_url AS 'image_link',
 			       (
-			           SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
+			           SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR '|'), '|', 10)
 			           FROM item_image ig
 			           WHERE ig.item_id = ii.idx
 			           ORDER BY ig.priority ASC
@@ -124,6 +128,7 @@ export class NaverFeed implements iFeed {
 			    JOIN item_info ii on cud.item_id = ii.idx
 					JOIN item_show_price isp on ii.idx = isp.item_id
 			    JOIN shop_info si on ii.shop_id = si.shop_id
+			    JOIN country_info ci on ii.item_country = ci.country_tag
 			    JOIN brand_info bi on ii.brand_id = bi.brand_id
 			    JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
 			    JOIN item_origin_price iop on ii.idx = iop.item_id
@@ -138,25 +143,26 @@ export class NaverFeed implements iFeed {
 			  	) = fc.idx
 			    LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx
 			    LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
+					LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
 			WHERE ii.is_verify = 1
         AND cul.is_naver_upload = 1
-			ORDER BY (
-								 # 상품 우선 순위
-									 (ii.item_priority > 0) * 1000
-									 # 프로모션 우선 순위
-									 + if(exists((
-									 SELECT spm.item_id
-									 FROM shop_promotion_map spm
-													JOIN shop_promotions sp on spm.shop_promotion_id = sp.id
-									 WHERE spm.item_id = ii.idx
-										 AND (
-											 (CURRENT_TIMESTAMP > sp.started_at OR sp.started_at is NULL)
-											 AND
-											 (CURRENT_TIMESTAMP < sp.ended_at OR sp.ended_at is NULL)
-										 )
-										 AND sp.is_active
-									 LIMIT 1
-								 )), 5, 0)
+			ORDER BY ii.item_priority > 0 DESC, # 상품 우선 순위
+			         inpi.naver_product_id IS NOT NULL DESC, # 네이버 가격비교 연결 상태
+			         (
+			             # 프로모션 우선 순위
+									 if(exists((
+									     SELECT spm.item_id
+									     FROM shop_promotion_map spm
+									         JOIN shop_promotions sp on spm.shop_promotion_id = sp.id
+									     WHERE spm.item_id = ii.idx
+									       AND (
+									           (CURRENT_TIMESTAMP > sp.started_at OR sp.started_at is NULL)
+									               AND
+									           (CURRENT_TIMESTAMP < sp.ended_at OR sp.ended_at is NULL)
+									       )
+									       AND sp.is_active
+									     LIMIT 1
+									     )), 5, 0)
 									 # 자체 할인 우선 순위
 									 + if(ip.discount_rate >= 0.1, 1, 0)
 									 # 카테고리 우선 순위
@@ -195,7 +201,6 @@ export class NaverFeed implements iFeed {
 		})
 		const title: string = await tsvFormat.title({
 			mainName: row.main_name,
-			fetchingCategoryName: row.fetching_category_name,
 			itemName: row.item_name,
 			customColor: row.custom_color,
 			mpn: row.designer_style_id,
@@ -206,7 +211,15 @@ export class NaverFeed implements iFeed {
 		const mobileLink: string = tsvFormat.mobileLink({
 			cafe24MobileAddress: constants.cafe24MobileAddress(),
 		})
-		const price: number = Math.ceil(((row.ip_final_price * 0.97) - 10000) / 100) * 100
+		const searchTag: string = tsvFormat.searchTag({
+			itemName: row.item_name,
+			brandMainName: row.main_name,
+			categoryName2: row.category_name2,
+			categoryName3: row.category_name3,
+		})
+		const rawPrice = row.ip_final_price * 0.97
+		const price: number = Math.ceil(rawPrice / 100) * 100
+		const point: number = Math.floor(rawPrice * 0.02)
 
 		return {
 			id: row.id,
@@ -223,14 +236,21 @@ export class NaverFeed implements iFeed {
 			'category_name3': row.category_name3,
 			'naver_category': row.naver_category,
 			condition: constants.condition(),
-			'brand_name': row.main_name,
+			'brand': row.main_name,
 			'event_words': constants.eventWords(),
+			coupon: '10000원',
+			'interest_free_event': '삼성카드^2~6|BC카드^2~6|KB국민카드^2~6|신한카드^2~6|현대카드^2~7|외환카드^2~6|롯데카드^2~4|NH채움카드^2~6',
+			point,
+			'manufacture_define_number': row.designer_style_id || '',
+			'naver_product_id': row.naver_product_id || '',
+			origin: row.country_name === 'Unknown' ? '' : row.country_name,
+			'partner_coupon_download': 'Y',
 			shipping: constants.shipping(),
 			'import_flag': row.import_flag,
 			'option_detail': row.option_detail,
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
-			'search_tag': row.search_tag,
+			'search_tag': searchTag
 		}
 	}
 }

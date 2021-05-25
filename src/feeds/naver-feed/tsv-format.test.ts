@@ -7,7 +7,6 @@ describe('TSVFormat', () => {
 	const constants = new Constants()
 	const givenID: number = 1
 	const givenMainName: string = '스톤아일랜드'
-	const givenFetchingCategoryName: string = '자켓'
 	const givenItemName: string = '멤브라나 3L 더스트 후드 아노락'
 
 	describe('title', () => {
@@ -18,12 +17,11 @@ describe('TSVFormat', () => {
 			it('returns includes text "남성"', async () => {
 				const title = await tsvFormat.title({
 					mainName: givenMainName,
-					fetchingCategoryName: givenFetchingCategoryName,
 					itemName: givenItemName,
 					customColor: givenCustomColor
 				})
 
-				expect(title).toBe('스톤아일랜드 남성 자켓 멤브라나 3L 더스트 후드 아노락')
+				expect(title).toBe('스톤아일랜드 남성 멤브라나 3L 더스트 후드 아노락')
 			})
 		})
 
@@ -34,12 +32,11 @@ describe('TSVFormat', () => {
 			it('returns includes text "여성" and with color', async () => {
 				const title = await tsvFormat.title({
 					mainName: givenMainName,
-					fetchingCategoryName: givenFetchingCategoryName,
 					itemName: givenItemName,
 					customColor: givenCustomColor
 				})
 
-				expect(title).toBe('스톤아일랜드 여성 자켓 멤브라나 3L 더스트 후드 아노락 DARK GREEN')
+				expect(title).toBe('스톤아일랜드 여성 멤브라나 3L 더스트 후드 아노락 DARK GREEN')
 			})
 		})
 	})

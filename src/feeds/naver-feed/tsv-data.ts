@@ -12,15 +12,22 @@ type TSVData = {
   'category_name2': string
   'category_name3': string
   'naver_category': string
+  'naver_product_id': string
   condition: string
-  'brand_name': string
-  'event_words': string
-  shipping: number
   'import_flag': string
+  'manufacture_define_number': string
+  'brand': string
+  'origin': string
+  'event_words': string
+  coupon: string
+  'partner_coupon_download': string
+  'interest_free_event': string
+  point: number
+  'search_tag': string
+  shipping: number
   'option_detail': string
   gender: string
   'includes_vat': string
-  'search_tag': string
 }
 
 export default TSVData
