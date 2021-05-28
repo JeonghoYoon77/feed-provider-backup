@@ -4,7 +4,7 @@ import {
 	NaverFeed,
 	GoogleFeed,
 	KakaoFeed,
-	FacebookFeed,
+	FacebookFeed, NaverSalesFeed,
 } from './feeds'
 
 program.version(version)
@@ -18,6 +18,10 @@ async function main() {
 		'NAVER-FEED': async () => {
 			const naverFeed = new NaverFeed()
 			await naverFeed.upload()
+		},
+		'NAVER-SALES-FEED': async () => {
+			const naverSalesFeed = new NaverSalesFeed()
+			await naverSalesFeed.upload()
 		},
 		'GOOGLE-FEED': async () => {
 			const googleFeed = new GoogleFeed()
