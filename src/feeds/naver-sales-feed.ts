@@ -1,6 +1,7 @@
 import { iFeed } from './feed'
 import { MySQL, S3Client } from '../utils'
 import {parse} from 'json2csv'
+import moment from 'moment'
 
 
 export class NaverSalesFeed implements iFeed {
@@ -21,12 +22,18 @@ export class NaverSalesFeed implements iFeed {
 
 	async getTsv() {
 		const limit = 100000
+		const targetDay = new Date()
+		targetDay.setDate(targetDay.getDate() - 1)
+		const nextDay = new Date()
+		const target = moment(targetDay).format('YYYY-MM-DD')
+		const targetEnd = moment(nextDay).format('YYYY-MM-DD')
+
 		const query = `
 			SELECT cud.product_no AS mall_id,
 			       IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS sales_count,
 			       IFNULL(amount, 0) AS sale_price,
 						 IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS order_count,
-			       '2021-05-27' AS dt
+			       ? AS dt
 			FROM cafe24_upload_list cul
 			    JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			    JOIN item_info ii on cud.item_id = ii.idx
@@ -36,7 +43,7 @@ export class NaverSalesFeed implements iFeed {
 			            LEFT JOIN (
 			                SELECT itemId, COUNT(*) orderTotal, sum(amount) amount
 			                FROM fetching_logs.\`order\`
-			                WHERE date > '2021-05-27' AND date < '2021-05-28'
+			                WHERE date > ? AND date < ?
 			                  AND isRefunded = 0
 			                GROUP BY itemId
 			            ) o ON i.itemId = o.itemId
@@ -44,7 +51,7 @@ export class NaverSalesFeed implements iFeed {
 			            JOIN cafe24_upload_list cul on ii.idx = cul.item_id
 			            JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			        WHERE i.\`from\` = 'NAVER'
-			          AND date > '2021-05-27' AND date < '2021-05-28'
+			          AND date > ? AND date < ?
 			          AND i.itemId != 0
 			        GROUP BY i.itemId
 			    ) i ON i.itemId = ii.idx
@@ -105,7 +112,9 @@ export class NaverSalesFeed implements iFeed {
 						 si.priority DESC
 			LIMIT ?
 		`
-		const data = await MySQL.execute(query, [limit])
+		const data = await MySQL.execute(query, [
+			target, target, targetEnd, target, targetEnd, limit
+		])
 
 		return parse(data, {
 			fields: Object.keys(data[0]),
