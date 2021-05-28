@@ -13,9 +13,12 @@ class TSVFormat {
 	}
 
 	public async title({ mainName, itemName, customColor, mpn = '' }): Promise<string> {
+
+		itemName = itemName.trim()
   	let title = `${mainName} ${this._gender} ${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
 
-		title.replace('é', '')
+		title = title.replace('é', '')
+		title = title.split('\n').join('')
 
 		return title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
 	}
@@ -42,6 +45,7 @@ class TSVFormat {
 	}
 
 	public searchTag({itemName, brandMainName, categoryName2, categoryName3}) {
+  	itemName = itemName.trim()
   	const tags = [
   		`${brandMainName}${itemName}`,
 			`${brandMainName}${this._gender}${categoryName3}`,
