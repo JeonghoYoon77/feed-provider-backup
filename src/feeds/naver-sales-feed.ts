@@ -29,11 +29,11 @@ export class NaverSalesFeed implements iFeed {
 		const targetEnd = moment(nextDay).format('YYYY-MM-DD')
 
 		const query = `
-			SELECT cud.product_no AS mall_id,
-			       IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS sales_count,
-			       IFNULL(amount, 0) AS sale_price,
-						 IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS order_count,
-			       ? AS dt
+			SELECT DISTINCT cud.product_no AS mall_id,
+			                IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS sales_count,
+			                IFNULL(amount, 0) AS sale_price,
+			                IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS order_count,
+			                ? AS dt
 			FROM cafe24_upload_list cul
 			    JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			    JOIN item_info ii on cud.item_id = ii.idx
@@ -115,6 +115,14 @@ export class NaverSalesFeed implements iFeed {
 		const data = await MySQL.execute(query, [
 			target, target, targetEnd, target, targetEnd, limit
 		])
+
+		data.map((row) => {
+			/* eslint-disable camelcase */
+			if (!row.sales_count) row.sales_count = 0
+			if (!row.order_count) row.order_count = 0
+			return row
+			/* eslint-enable camelcase */
+		})
 
 		return parse(data, {
 			fields: Object.keys(data[0]),
