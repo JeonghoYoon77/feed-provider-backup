@@ -30,7 +30,7 @@ export class NaverSalesFeed implements iFeed {
 
 		const query = `
 			SELECT DISTINCT cud.product_no AS mall_id,
-			                IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS sales_count,
+			                IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS sale_count,
 			                IFNULL(amount, 0) AS sale_price,
 			                IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS order_count,
 			                ? AS dt
@@ -112,13 +112,13 @@ export class NaverSalesFeed implements iFeed {
 						 si.priority DESC
 			LIMIT ?
 		`
-		const data = await MySQL.execute(query, [
+		let data = await MySQL.execute(query, [
 			target, target, targetEnd, target, targetEnd, limit
 		])
 
-		data.map((row) => {
+		data = data.map((row) => {
 			/* eslint-disable camelcase */
-			if (!row.sales_count) row.sales_count = 0
+			if (!row.sale_count) row.sale_count = 0
 			if (!row.order_count) row.order_count = 0
 			return row
 			/* eslint-enable camelcase */
