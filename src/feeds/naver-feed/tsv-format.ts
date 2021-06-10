@@ -15,7 +15,7 @@ class TSVFormat {
 	public async title({ mainName, itemName, customColor, mpn = '' }): Promise<string> {
 
 		itemName = itemName.trim()
-  	let title = `${mainName} ${this._gender} ${itemName} ${`${this.color(customColor)} ${mpn ? mpn : ''}`.trim()}`.trim()
+  	let title = `${mainName} ${this._gender} ${itemName} ${`${mpn ? mpn : ''} ${this.color(customColor)}`.trim()}`.trim()
 
 		title = title.replace('é', '')
 		title = title.split('\n').join('')
