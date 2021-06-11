@@ -37,14 +37,14 @@ export class NaverSalesFeed implements iFeed {
 			FROM cafe24_upload_list cul
 			    JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			    JOIN item_info ii on cud.item_id = ii.idx
-			    LEFT JOIN (
+			    JOIN (
 			        SELECT i.itemId, COUNT(*) inflowTotal, orderTotal, amount, CAST(date AS DATE)
 			        FROM fetching_logs.inflow i
-			            LEFT JOIN (
+			            JOIN (
 			                SELECT itemId, COUNT(*) orderTotal, sum(amount) amount
 			                FROM fetching_logs.\`order\`
 			                WHERE date > ? AND date < ?
-			                  AND isRefunded = 0
+			                  AND isValid != 0
 			                GROUP BY itemId
 			            ) o ON i.itemId = o.itemId
 			            JOIN item_info ii ON ii.idx = i.itemId
