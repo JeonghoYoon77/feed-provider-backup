@@ -41,6 +41,7 @@ export class NaverFeed implements iFeed {
 		return format(`
 			SELECT cud.product_no AS 'id',
 			       ii.shop_id AS shop_id,
+						 ii.item_code AS item_code,
 				
 			       bi.main_name,
 			       ii.item_gender,
@@ -200,6 +201,7 @@ export class NaverFeed implements iFeed {
 			shopId: row.shop_id,
 		})
 		const title: string = await tsvFormat.title({
+			itemCode: row.item_code,
 			mainName: row.main_name,
 			itemName: row.item_name,
 			customColor: row.custom_color,

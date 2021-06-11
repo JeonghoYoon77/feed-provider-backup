@@ -12,10 +12,10 @@ class TSVFormat {
 		this._shopId = shopId
 	}
 
-	public async title({ mainName, itemName, customColor, mpn = '' }): Promise<string> {
+	public async title({ itemCode, mainName, itemName, customColor, mpn = '' }): Promise<string> {
 
 		itemName = itemName.trim()
-  	let title = `${mainName} ${this._gender} ${itemName} ${`${mpn ? mpn : ''} ${this.color(customColor)}`.trim()}`.trim()
+  	let title = `${mainName} ${this._gender} ${itemName} ${`${mpn ? mpn : itemCode} ${this.color(customColor)}`.trim()}`.trim()
 
 		title = title.replace('é', '')
 		title = title.split('\n').join('')
