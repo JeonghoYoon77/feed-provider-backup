@@ -59,6 +59,36 @@ class TSVFormat {
 		]
 		return tags.join('|').split(' ').join('')
 	}
+
+	price(price: number): number {
+		let rawPrice = price
+
+		rawPrice *= 0.97
+
+		return Math.ceil(rawPrice / 100) * 100
+	}
+
+	partnerCouponDownload(price: any) {
+		if (price >= 1000000) {
+			return 'Y'
+		} else if (price >= 300000) {
+			return '' // 쿠폰 자동 적용됨
+		} else if (price >= 200000) {
+			return 'Y'
+		}
+
+		return '' // 쿠폰 없음
+	}
+
+	coupon(price: any) {
+		if (price >= 1000000) {
+			return '30000원'
+		} else if (price >= 300000) {
+			return '20000원'
+		} else if (price >= 200000) {
+			return '5000원'
+		}
+	}
 }
 
 export default TSVFormat

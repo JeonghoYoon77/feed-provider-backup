@@ -219,9 +219,9 @@ export class NaverFeed implements iFeed {
 			categoryName2: row.category_name2,
 			categoryName3: row.category_name3,
 		})
-		const rawPrice = row.ip_final_price * 0.97
-		const price: number = Math.ceil(rawPrice / 100) * 100
-		const point: number = Math.floor(rawPrice * 0.02)
+
+		const price: number = tsvFormat.price(row.ip_final_price)
+		const point: number = Math.floor(price * 0.02)
 
 		return {
 			id: row.id,
@@ -240,13 +240,13 @@ export class NaverFeed implements iFeed {
 			condition: constants.condition(),
 			'brand': row.main_name,
 			'event_words': constants.eventWords(),
-			coupon: '10000원',
+			coupon: tsvFormat.coupon(row.ip_final_price),
+			'partner_coupon_download': tsvFormat.partnerCouponDownload(row.ip_final_price),
 			'interest_free_event': '삼성카드^2~6|BC카드^2~6|KB국민카드^2~6|신한카드^2~6|현대카드^2~7|외환카드^2~6|롯데카드^2~4|NH채움카드^2~6',
 			point,
 			'manufacture_define_number': row.designer_style_id || '',
 			'naver_product_id': row.naver_product_id || '',
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
-			'partner_coupon_download': 'Y',
 			shipping: constants.shipping(),
 			'import_flag': row.import_flag,
 			'option_detail': row.option_detail,
