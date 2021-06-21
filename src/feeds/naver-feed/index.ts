@@ -147,6 +147,7 @@ export class NaverFeed implements iFeed {
 					LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
 			WHERE ii.is_verify = 1
         AND cul.is_naver_upload = 1
+				AND NOT (bi.brand_id = 17 AND (fc.idx IN (17, 21) OR fc.fetching_category_parent_id IN (17, 21)))
 			ORDER BY ii.item_priority > 0 DESC, # 상품 우선 순위
 			         inpi.naver_product_id IS NOT NULL DESC, # 네이버 가격비교 연결 상태
 			         (
