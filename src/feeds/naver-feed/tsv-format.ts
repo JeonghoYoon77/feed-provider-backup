@@ -57,7 +57,7 @@ class TSVFormat {
 			`${this._gender}${categoryName3}`,
 			`${this._gender}${categoryName2}`,
 		]
-		return tags.join('|').split(' ').join('')
+		return tags.join('|').split(' ').join('').split('\n').join(' ')
 	}
 
 	price(price: number): number {
