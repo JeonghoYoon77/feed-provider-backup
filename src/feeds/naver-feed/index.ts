@@ -12,11 +12,11 @@ const constants = new Constants()
 
 export class NaverFeed implements iFeed {
 	async upload() {
-		const buffer = await this.getTsvBuffer('\t')
+		const buffer = await this.getTsvBuffer()
 
 		const feedUrl = await S3Client.upload({
 			folderName: 'feeds',
-			fileName: 'naver-feed-test.tsv',
+			fileName: 'naver-feed.tsv',
 			buffer,
 		})
 
