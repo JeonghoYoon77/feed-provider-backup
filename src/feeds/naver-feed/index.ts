@@ -16,7 +16,7 @@ export class NaverFeed implements iFeed {
 
 		const feedUrl = await S3Client.upload({
 			folderName: 'feeds',
-			fileName: 'naver-feed.tsv',
+			fileName: 'naver-feed-test.tsv',
 			buffer,
 		})
 
@@ -41,6 +41,7 @@ export class NaverFeed implements iFeed {
 	private static query(): string {
 		return format(`
 			SELECT ii.idx AS 'id',
+			       cud.product_no AS product_no,
 			       ii.shop_id AS shop_id,
 						 ii.item_code AS item_code,
 				
@@ -157,7 +158,8 @@ export class NaverFeed implements iFeed {
 		const tsvFormat = new TSVFormat({
 			itemGender: row.item_gender,
 			id: row.id,
-			shopId: row.shop_id,
+			productNo: row.product_no,
+			shopId: row.shop_id
 		})
 		const title: string = await tsvFormat.title({
 			itemCode: row.item_code,
@@ -168,9 +170,11 @@ export class NaverFeed implements iFeed {
 		})
 		const pcLink: string = tsvFormat.pcLink({
 			cafe24PCAddress: constants.cafe24PCAddress(),
+			cafe24PCAddressApp: constants.cafe24PCAddressApp(),
 		})
 		const mobileLink: string = tsvFormat.mobileLink({
 			cafe24MobileAddress: constants.cafe24MobileAddress(),
+			cafe24MobileAddressApp: constants.cafe24MobileAddressApp(),
 		})
 		const searchTag: string = tsvFormat.searchTag({
 			itemName: row.item_name,

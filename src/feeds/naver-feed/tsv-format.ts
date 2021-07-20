@@ -3,13 +3,16 @@ import { isEmpty } from 'lodash'
 class TSVFormat {
   private readonly _gender: string
 	private readonly _id: number | string
+	private readonly _productNo: number | string
 	private readonly _shopId: number
+	private readonly _isCafe24Active: boolean
 
 
-	constructor({ itemGender, id, shopId }) {
+	constructor({ itemGender, id, shopId, productNo }) {
   	this._gender = itemGender === 'W' ? '여성' : '남성'
 		this._id = id
 		this._shopId = shopId
+		this._productNo = productNo
 	}
 
 	public async title({ itemCode, mainName, itemName, customColor, mpn = '' }): Promise<string> {
@@ -23,12 +26,12 @@ class TSVFormat {
 		return title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
 	}
 
-	public pcLink({ cafe24PCAddress }) {
-  	return `${cafe24PCAddress}${this._id}`
+	public pcLink({ cafe24PCAddress, cafe24PCAddressApp }) {
+  	return `${this._productNo ? cafe24PCAddress : cafe24PCAddressApp}${this._productNo || this._id}`
 	}
 
-	public mobileLink({ cafe24MobileAddress }) {
-  	return `${cafe24MobileAddress}${this._id}`
+	public mobileLink({ cafe24MobileAddress, cafe24MobileAddressApp }) {
+  	return `${this._productNo ? cafe24MobileAddress : cafe24MobileAddressApp}${this._productNo || this._id}`
 	}
 
 	public gender() {
