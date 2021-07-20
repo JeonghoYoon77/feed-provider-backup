@@ -17,7 +17,7 @@ class TSVFormat {
 		itemName = itemName.trim()
   	let title = `${mainName} ${this._gender} ${itemName} ${`${mpn ? mpn : itemCode} ${this.color(customColor)}`.trim()}`.trim()
 
-		title = title.replace('é', '')
+		title = title.replace('è', 'e')
 		title = title.split('\n').join('')
 
 		return title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')

@@ -1,7 +1,7 @@
 class Constants {
   private _limit: number = 100000
-  private _cafe24PCAddress: string = 'https://fetching.co.kr/product/detail.html?product_no='
-  private _cafe24MobileAddress: string = 'https://m.fetching.co.kr/product/detail.html?product_no='
+  private _cafe24PCAddress: string = 'https://fetching.co.kr/product_detail_app.html?product_no='
+  private _cafe24MobileAddress: string = 'https://m.fetching.co.kr/product_detail_app.html?product_no='
   private _condition: string = '신상품'
   private _shipping: number = 0
   private _includesVat: string = 'Y'

@@ -12,34 +12,35 @@ const constants = new Constants()
 
 export class NaverFeed implements iFeed {
 	async upload() {
-		const buffer = await this.getTsvBuffer()
+		const buffer = await this.getTsvBuffer(',')
 
 		const feedUrl = await S3Client.upload({
 			folderName: 'feeds',
-			fileName: 'naver-feed.tsv',
+			fileName: 'naver-feed-test.csv',
 			buffer,
 		})
+
 		console.log(`FEED_URL: ${feedUrl}`)
 	}
 
-	async getTsvBuffer(): Promise<Buffer> {
-		return Buffer.from(await this.getTsv(), 'utf-8')
+	async getTsvBuffer(delimiter = '\t'): Promise<Buffer> {
+		return Buffer.from(await this.getTsv(delimiter), 'utf-8')
 	}
 
-	async getTsv(): Promise<string> {
+	async getTsv(delimiter = '\t'): Promise<string> {
 		const data = await MySQL.execute(NaverFeed.query())
 		const tsvData: TSVData[] = await Promise.all(data.map(NaverFeed.makeRow))
 
 		return parse(tsvData, {
 			fields: Object.keys(tsvData[0]),
-			delimiter: '\t',
+			delimiter,
 			quote: '',
 		})
 	}
 
 	private static query(): string {
 		return format(`
-			SELECT cud.product_no AS 'id',
+			SELECT ii.idx AS 'id',
 			       ii.shop_id AS shop_id,
 						 ii.item_code AS item_code,
 				
@@ -124,9 +125,9 @@ export class NaverFeed implements iFeed {
 			      		 )
 			       ), '\t', ' ') AS 'search_tag',
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
-			FROM cafe24_upload_list cul
-			    JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
-			    JOIN item_info ii on cud.item_id = ii.idx
+			FROM naver_upload_list nul
+			    LEFT JOIN cafe24_upload_db cud on nul.item_id = cud.item_id
+			    JOIN item_info ii on nul.item_id = ii.idx
 					JOIN item_show_price isp on ii.idx = isp.item_id
 			    JOIN shop_info si on ii.shop_id = si.shop_id
 			    JOIN country_info ci on ii.item_country = ci.country_tag
@@ -146,51 +147,8 @@ export class NaverFeed implements iFeed {
 			    LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
 					LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
 			WHERE ii.is_verify = 1
-        AND cul.is_naver_upload = 1
 				AND NOT (bi.brand_id = 17 AND (fc.idx IN (17, 21) OR fc.fetching_category_parent_id IN (17, 21)))
-			ORDER BY ii.item_priority > 0 DESC, # 상품 우선 순위
-			         inpi.naver_product_id IS NOT NULL DESC, # 네이버 가격비교 연결 상태
-			         (
-			             # 프로모션 우선 순위
-									 if(exists((
-									     SELECT spm.item_id
-									     FROM shop_promotion_map spm
-									         JOIN shop_promotions sp on spm.shop_promotion_id = sp.id
-									     WHERE spm.item_id = ii.idx
-									       AND (
-									           (CURRENT_TIMESTAMP > sp.started_at OR sp.started_at is NULL)
-									               AND
-									           (CURRENT_TIMESTAMP < sp.ended_at OR sp.ended_at is NULL)
-									       )
-									       AND sp.is_active
-									     LIMIT 1
-									     )), 5, 0)
-									 # 자체 할인 우선 순위
-									 + if(ip.discount_rate >= 0.1, 1, 0)
-									 # 카테고리 우선 순위
-									 + fc.priority
-									 # 카테고리 별 주요 브랜드 우선순위
-									 + if(ii.idx IN (
-									 SELECT ii.idx
-									 FROM item_info as ii
-													JOIN item_category_map icm ON ii.idx = icm.item_id
-													JOIN important_brands_of_fetching_categories fcib
-															 ON icm.fetching_category_id = fcib.category_id AND
-																	ii.brand_id = fcib.brand_id
-													JOIN item_price ip ON ii.idx = ip.item_id AND ip.fixed_rate > 0
-								 ), 1, 0)
-									 # 브랜드 우선 순위
-									 + if(ii.idx IN (
-									 SELECT DISTINCT (ii.idx) AS idx
-									 FROM item_info AS ii,
-												item_category_map AS icm,
-												important_brands_of_fetching_categories AS fcib
-									 WHERE ii.idx = icm.item_id
-										 AND icm.fetching_category_id = fcib.category_id
-										 AND fcib.brand_id = ii.brand_id
-								 ), 1, 0)
-								 ) DESC,
-							 si.priority DESC
+			ORDER BY nul.sequence
 			LIMIT ?
 		`, [constants.limit()])
 	}
