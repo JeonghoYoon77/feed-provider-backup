@@ -59,6 +59,9 @@ export class NaverFeed implements iFeed {
 			       ip.final_price AS 'ip_final_price',
 			       iop.final_price AS 'iop_final_price',
 
+						 iup.total_price AS 'iup_total_price',
+						 iop.total_price AS 'iop_total_price',
+
 			       ii.image_url AS 'image_link',
 			       (
 			           SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR '|'), '|', 10)
@@ -134,6 +137,7 @@ export class NaverFeed implements iFeed {
 			    JOIN country_info ci on ii.item_country = ci.country_tag
 			    JOIN brand_info bi on ii.brand_id = bi.brand_id
 			    JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
+					JOIN item_user_price iup on ii.idx = iup.item_id
 			    JOIN item_origin_price iop on ii.idx = iop.item_id
 			    JOIN fetching_category fc on (
 			        SELECT icm.fetching_category_id
@@ -183,15 +187,21 @@ export class NaverFeed implements iFeed {
 			categoryName3: row.category_name3,
 		})
 
-		const price: number = tsvFormat.price(row.ip_final_price)
-		const point: number = Math.floor(price * 0.02)
+		let price, point: any = ''
+
+		if (row.product_no) {
+			price = tsvFormat.price(row.ip_final_price)
+			point = Math.floor(price * 0.02)
+		} else {
+			price = row.iup_total_price
+		}
 
 		return {
 			id: row.id,
 			title,
 			'price_pc': price,
 			'price_mobile': price,
-			'normal_price': row.iop_final_price,
+			'normal_price': row.product_no ? row.iop_final_price : row.iop_total_price,
 			link: pcLink,
 			'mobile_link': mobileLink,
 			'image_link': row.image_link,
@@ -202,16 +212,16 @@ export class NaverFeed implements iFeed {
 			'naver_category': row.naver_category,
 			condition: constants.condition(),
 			'brand': row.main_name,
-			'event_words': constants.eventWords(),
-			coupon: tsvFormat.coupon(row.ip_final_price),
-			'partner_coupon_download': tsvFormat.partnerCouponDownload(row.ip_final_price),
-			'interest_free_event': '삼성카드^2~6|BC카드^2~6|KB국민카드^2~6|신한카드^2~6|현대카드^2~7|외환카드^2~6|롯데카드^2~4|NH채움카드^2~6',
+			'event_words': row.product_no ? constants.eventWords() : constants.eventWordsApp(),
+			coupon: row.product_no ? tsvFormat.coupon(row.ip_final_price) : '',
+			'partner_coupon_download': row.product_no ? tsvFormat.partnerCouponDownload(row.ip_final_price) : '',
+			'interest_free_event': row.product_no ? '삼성카드^2~6|BC카드^2~6|KB국민카드^2~6|신한카드^2~6|현대카드^2~7|외환카드^2~6|롯데카드^2~4|NH채움카드^2~6' : '',
 			point,
 			'manufacture_define_number': row.designer_style_id || '',
 			'naver_product_id': row.naver_product_id || '',
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
 			shipping: constants.shipping(),
-			'import_flag': row.import_flag,
+			'import_flag': row.product_no ? row.import_flag : 'N',
 			'option_detail': row.option_detail,
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
