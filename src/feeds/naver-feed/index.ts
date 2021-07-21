@@ -54,6 +54,8 @@ export class NaverFeed implements iFeed {
 			       idsi.designer_style_id,
 						 inpi.naver_product_id,
 			       
+			       si.shop_type,
+			       
 			       ci.country_name,
 				
 			       ip.final_price AS 'ip_final_price',
@@ -221,7 +223,7 @@ export class NaverFeed implements iFeed {
 			'naver_product_id': row.naver_product_id || '',
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
 			shipping: constants.shipping(),
-			'import_flag': row.product_no ? row.import_flag : 'N',
+			'import_flag': row.shop_type === '해외편집샵' ? row.import_flag : 'N',
 			'option_detail': row.option_detail,
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
