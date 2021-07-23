@@ -22,8 +22,14 @@ export class GoogleFeed implements iFeed {
 				ii.idx as 'id',
 				REPLACE(ii.item_name, '\t', ' ') as 'title',
 				REPLACE(ii.item_description, '\t', ' ') as 'description',
-				CONCAT('https://fetching.co.kr/product/detail.html?product_no=', c24ud.product_no) as 'link',
-				CONCAT('https://m.fetching.co.kr/app/detail.html?product_no=', c24ud.product_no) as 'mobile_link',
+				IF(c24ud.product_no,
+				   CONCAT('https://fetching.co.kr/product/detail.html?product_no=', c24ud.product_no),
+				   CONCAT('https://fetching.co.kr/product_detail_app.html?product_no=', ii.idx)
+				) as 'link',
+				IF(c24ud.product_no,
+				   CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', c24ud.product_no),
+				   CONCAT('https://m.fetching.co.kr/product_detail_app.html?product_no=', ii.idx)
+				) as 'mobile_link',
 				ii.image_url as 'image_link',
 				(
 						SELECT SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(ig.item_image_url, ',', '%2C') SEPARATOR ','), ',', 10)
@@ -44,8 +50,8 @@ export class GoogleFeed implements iFeed {
 							AND i.size_quantity > 0
 					LIMIT 1
 				)) > 0, 'in stock', 'out of stock') as 'availability',
-				CONCAT(iop.final_price, '.00 KRW') as 'price',
-				CONCAT(ip.final_price, '.00 KRW') as 'sale_price',
+				CONCAT(IF(c24ud.product_no, iop.final_price, iop.total_price), '.00 KRW') as 'price',
+				CONCAT(IF(c24ud.product_no, ip.final_price, iup.total_price), '.00 KRW') as 'sale_price',
 				fc.google_category_id as 'google_product_category',
 				(
 						SELECT GROUP_CONCAT(fc.fetching_category_name SEPARATOR ' > ')
@@ -60,10 +66,12 @@ export class GoogleFeed implements iFeed {
 				'no' as 'adult',
 				IF(ii.item_gender = 'W', 'female', 'male') as 'gender',
 				ii.idx as 'item_group_id'
-			FROM cafe24_upload_list c24ul
-			JOIN item_info ii on c24ul.item_id = ii.idx
-			JOIN cafe24_upload_db c24ud on ii.idx = c24ud.item_id
-			JOIN item_price ip on ii.idx = ip.item_id
+			FROM naver_upload_list nul
+			JOIN item_info ii on nul.item_id = ii.idx
+			LEFT JOIN cafe24_upload_db c24ud on ii.idx = c24ud.item_id
+			JOIN item_show_price ip on ii.idx = isp.item_id
+			JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
+			JOIN item_user_price iop on ii.idx = iup.item_id
 			JOIN item_origin_price iop on ii.idx = iop.item_id
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
 			JOIN fetching_category fc on (
@@ -75,8 +83,7 @@ export class GoogleFeed implements iFeed {
 				ORDER BY icm.fetching_category_id DESC
 				LIMIT 1
 			) = fc.idx
-			WHERE c24ul.is_naver_upload = 1
-				OR c24ul.is_smart_store_upload = 1
+			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
