@@ -15,12 +15,13 @@ class TSVFormat {
 		this._productNo = productNo
 	}
 
-	public async title({ itemCode, mainName, itemName, customColor, mpn = '' }): Promise<string> {
-
+	public async title({ itemCode, mainName, lastCategory, itemName, customColor, mpn = '',  }): Promise<string> {
+		if (itemName.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) itemName = lastCategory
 		itemName = itemName.trim()
-  	let title = `${mainName} ${this._gender} ${itemName} ${`${mpn ? mpn : itemCode} ${this.color(customColor)}`.trim()}`.trim()
 
-		title = title.replace('è', 'e')
+		let title = `${mainName} ${this._gender} ${itemName} ${`${mpn ? mpn : itemCode} ${this.color(customColor)}`.trim()}`.trim()
+
+		title = title.normalize('NFD').replace(/\p{Diacritic}/gu, '')
 		title = title.split('\n').join('')
 
 		return title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')

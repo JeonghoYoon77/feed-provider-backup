@@ -132,7 +132,7 @@ export class NaverFeed implements iFeed {
 			       ), '\t', ' ') AS 'search_tag',
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM naver_upload_list nul
-			    LEFT JOIN cafe24_upload_db cud on nul.item_id = cud.item_id
+			    LEFT JOIN cafe24_upload_db cud on nul.item_id = cud.item_id AND cud.is_active = 1
 			    JOIN item_info ii on nul.item_id = ii.idx
 					JOIN item_show_price isp on ii.idx = isp.item_id
 			    JOIN shop_info si on ii.shop_id = si.shop_id
@@ -170,6 +170,7 @@ export class NaverFeed implements iFeed {
 		const title: string = await tsvFormat.title({
 			itemCode: row.item_code,
 			mainName: row.main_name,
+			lastCategory: row.category_name3 === '기타' ? row.category_name2 : row.category_name3,
 			itemName: row.item_name,
 			customColor: row.custom_color,
 			mpn: row.designer_style_id,
