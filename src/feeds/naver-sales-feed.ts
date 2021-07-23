@@ -73,6 +73,7 @@ export class NaverSalesFeed implements iFeed {
 
 		data = data.map((row) => {
 			/* eslint-disable camelcase */
+			row.mall_id = `F${row.mall_id}`
 			if (!row.sale_count) row.sale_count = 0
 			if (!row.order_count) row.order_count = 0
 			return row
