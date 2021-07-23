@@ -5,55 +5,55 @@ import access from '../../../facebook_spreadsheet_access.json'
 import { Form } from './form'
 
 const headers: string[] = [
-  'id',
-  'title',
-  'description',
-  'availability',
-  'condition',
-  'price',
-  'link',
-  'image_link',
-  'brand',
+	'id',
+	'title',
+	'description',
+	'availability',
+	'condition',
+	'price',
+	'link',
+	'image_link',
+	'brand',
 ]
 
 async function Upload(contents: Form[]): Promise<void> {
-  const sheet: GoogleSpreadsheetWorksheet = await getSheet()
-  await sheet.clear()
-  await sheet.setHeaderRow(headers)
-  await setContents(sheet, contents)
+	const sheet: GoogleSpreadsheetWorksheet = await getSheet()
+	await sheet.clear()
+	await sheet.setHeaderRow(headers)
+	await setContents(sheet, contents)
 }
 
 async function getSheet(): Promise<GoogleSpreadsheetWorksheet> {
-  const doc: GoogleSpreadsheet = new GoogleSpreadsheet(access.spreadsheet_id);
-  
-  await doc.useServiceAccountAuth({
-    client_email: access.client_email,
-    private_key: access.private_key,
-  });
+	const doc: GoogleSpreadsheet = new GoogleSpreadsheet(access.spreadsheet_id)
 
-  await doc.loadInfo()
+	await doc.useServiceAccountAuth({
+		client_email: access.client_email,
+		private_key: access.private_key,
+	})
 
-  return doc.sheetsByIndex[0];
+	await doc.loadInfo()
+
+	return doc.sheetsByIndex[0]
 }
 
 async function setContents(
-  sheet: GoogleSpreadsheetWorksheet, 
-  contents: Form[],
-  index: number | undefined = 0,
+	sheet: GoogleSpreadsheetWorksheet,
+	contents: Form[],
+	index: number | undefined = 0,
 ): Promise<void> {
-  if (contents.length < index) {
-    return
-  }
+	if (contents.length < index) {
+		return
+	}
 
-  const sliceSize = 1000
-  const nextIndex = index + sliceSize
-  const currentContents = slice(contents, index, nextIndex)
-  const sheetContents = currentContents.map((content: Form) => content.toObject())
+	const sliceSize = 1000
+	const nextIndex = index + sliceSize
+	const currentContents = slice(contents, index, nextIndex)
+	const sheetContents = currentContents.map((content: Form) => content.toObject())
 
-  await sheet.addRows(sheetContents)
-  console.log(`upload rows ${index} ~ ${nextIndex}`)
+	await sheet.addRows(sheetContents)
+	console.log(`upload rows ${index} ~ ${nextIndex}`)
 
-  return setContents(sheet, contents, nextIndex)
+	return setContents(sheet, contents, nextIndex)
 }
 
 export default Upload
