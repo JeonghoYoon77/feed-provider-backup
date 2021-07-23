@@ -199,7 +199,7 @@ export class NaverFeed implements iFeed {
 		}
 
 		return {
-			id: row.id,
+			id: `F${row.id}`,
 			title,
 			'price_pc': price,
 			'price_mobile': price,
