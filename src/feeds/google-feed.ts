@@ -66,8 +66,8 @@ export class GoogleFeed implements iFeed {
 				'no' as 'adult',
 				IF(ii.item_gender = 'W', 'female', 'male') as 'gender',
 				ii.idx as 'item_group_id'
-			FROM naver_upload_list nul
-			JOIN item_info ii on nul.item_id = ii.idx
+			FROM item_info ii
+			LEFT JOIN naver_upload_list nul on nul.item_id = ii.idx
 			LEFT JOIN cafe24_upload_db c24ud on ii.idx = c24ud.item_id
 			JOIN item_show_price ip on ii.idx = isp.item_id
 			JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule

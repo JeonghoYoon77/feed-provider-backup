@@ -84,12 +84,12 @@ export class KakaoFeed implements iFeed {
 				) AS 'category_id3',
 				bi.brand_name_kor AS 'brand_name',
 				'100% 정품, 관부가세 포함, 기한한정 세일!' AS 'event_words'
-			FROM cafe24_upload_db cud
-			JOIN item_info ii on cud.item_id = ii.idx
+			FROM item_info ii
+			LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
 			JOIN item_price ip on ii.idx = ip.item_id
 			JOIN item_origin_price iop on ii.idx = iop.item_id
-			JOIN cafe24_upload_list cul on ii.idx = cul.item_id
+			LEFT JOIN naver_upload_item cul on ii.idx = cul.item_id
 			JOIN fetching_category fc on (
 				SELECT icm.fetching_category_id
 				FROM fetching_category fc
@@ -101,7 +101,7 @@ export class KakaoFeed implements iFeed {
 			) = fc.idx
 			WHERE ii.is_verify = 1
 			  AND cud.is_active = 1
-			ORDER BY cul.is_naver_upload DESC 
+			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)

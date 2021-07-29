@@ -8,10 +8,10 @@ SELECT
   cud.product_no,
   ii.image_url,
   ii.brand_name
-FROM naver_upload_list nul
+FROM item_info ii
 
-JOIN item_info ii
-ON cud.item_id = ii.idx
+JOIN naver_upload_list nul
+ON nul.item_id = ii.idx
 
 LEFT JOIN cafe24_upload_db cud
 ON cud.item_id = ii.idx AND cud.is_active = 1
