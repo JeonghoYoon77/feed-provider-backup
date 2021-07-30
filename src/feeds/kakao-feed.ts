@@ -26,10 +26,10 @@ export class KakaoFeed implements iFeed {
 				ii.idx AS 'id',
 				REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'), fc.fetching_category_name, ii.item_name), '
 ', ''), '\t', '') AS 'title',
-				IF(c24ud.product_no, CEIL(ip.final_price * 0.97 / 100) * 100, iup.total_price) AS 'price_pc',
-				IF(c24ud.product_no, CEIL(ip.final_price * 0.97 / 100) * 100, iup.total_price) * 100 AS 'price_mobile',
-				IF(c24ud.product_no, CEIL(iop.final_price * 0.97 / 100) * 100, iop.total_price) * 100 AS 'normal_price',
-				IF(c24ud.product_no,
+				IF(cud.product_no, CEIL(ip.final_price * 0.97 / 100) * 100, iup.total_price) AS 'price_pc',
+				IF(cud.product_no, CEIL(ip.final_price * 0.97 / 100) * 100, iup.total_price) * 100 AS 'price_mobile',
+				IF(cud.product_no, CEIL(iop.final_price * 0.97 / 100) * 100, iop.total_price) * 100 AS 'normal_price',
+				IF(cud.product_no,
 				   CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', c24ud.product_no),
 				   CONCAT('https://m.fetching.co.kr/product_detail_app.html?product_no=', ii.idx)
 				) as 'link',
