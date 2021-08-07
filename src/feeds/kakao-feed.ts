@@ -89,7 +89,7 @@ export class KakaoFeed implements iFeed {
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
 			JOIN item_price ip on ii.idx = ip.item_id
 			JOIN item_origin_price iop on ii.idx = iop.item_id
-			LEFT JOIN naver_upload_item cul on ii.idx = cul.item_id
+			LEFT JOIN naver_upload_list cul on ii.idx = cul.item_id
 			JOIN fetching_category fc on (
 				SELECT icm.fetching_category_id
 				FROM fetching_category fc
