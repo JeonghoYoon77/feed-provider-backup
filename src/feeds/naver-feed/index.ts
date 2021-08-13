@@ -58,8 +58,8 @@ export class NaverFeed implements iFeed {
 			       
 			       ci.country_name,
 				
-			       ip.final_price AS 'ip_final_price',
-			       iop.final_price AS 'iop_final_price',
+			       cui.final_price AS 'ip_final_price',
+			       cui.origin_final_price AS 'iop_final_price',
 
 						 iup.total_price AS 'iup_total_price',
 						 iop.total_price AS 'iop_total_price',
@@ -133,6 +133,7 @@ export class NaverFeed implements iFeed {
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM naver_upload_list nul
 			    LEFT JOIN cafe24_upload_db cud on nul.item_id = cud.item_id AND cud.is_active = 1
+			    LEFT JOIN cafe24_upload_info cui on nul.item_id = cui.item_id
 			    JOIN item_info ii on nul.item_id = ii.idx
 					JOIN item_show_price isp on ii.idx = isp.item_id
 			    JOIN shop_info si on ii.shop_id = si.shop_id
