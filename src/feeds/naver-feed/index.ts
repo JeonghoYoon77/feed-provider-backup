@@ -227,7 +227,7 @@ export class NaverFeed implements iFeed {
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
 			shipping: constants.shipping(),
 			'import_flag': row.shop_type === '해외편집샵' ? row.import_flag : 'N',
-			'option_detail': row.option_detail,
+			'option_detail': row.option_detail.split('\n').filter(str => str).join(' '),
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
 			'search_tag': searchTag
