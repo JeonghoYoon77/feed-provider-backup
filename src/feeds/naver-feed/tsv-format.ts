@@ -19,7 +19,7 @@ class TSVFormat {
 		if (itemName.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) itemName = lastCategory
 		itemName = itemName.trim()
 
-		let title = `${mainName} ${this._gender} ${itemName} ${mpn ? mpn : shopId !== 72 ? itemCode : ''} ${this.color(customColor)}`
+		let title = `${mainName} ${this._gender} ${itemName} ${mpn ? mpn : [72, 80].includes(shopId) ? '' : itemCode} ${this.color(customColor)}`
 			.split(' ').filter(str => str).join(' ')
 
 		title = title.replace('è', 'e')
