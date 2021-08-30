@@ -109,14 +109,18 @@ export class KakaoFeed implements iFeed {
 
 		let txt = [`<<<tocnt>>>${data.length}`]
 
-		data.forEach((row) =>
+		data.forEach((row) => {
+			row.link = new URL(row.link)
+			row.link.searchParams.set('utm_source', 'daum')
+			row.link.searchParams.set('utm_medium', 'cpc')
+			row.link.searchParams.set('utm_campaign', 'shoppinghow')
 			txt.push(`<<<begin>>>
 <<<mapid>>>${row.id}
 <<<lprice>>>${row.normal_price}
 <<<price>>>${row.price_pc}
 <<<mpric>>>${row.price_mobile}
 <<<pname>>>${row.title}
-<<<pgurl>>>${row.link}
+<<<pgurl>>>${row.link.toString()}
 <<<igurl>>>${row.image_link}
 <<<cate1>>>${row.category_name1}
 <<<caid1>>>${row.category_id1}
@@ -128,6 +132,7 @@ export class KakaoFeed implements iFeed {
 <<<deliv>>>0
 <<<event>>>${row.event_words}
 <<<ftend>>>`)
+		}
 		)
 
 		return txt.join('\n')

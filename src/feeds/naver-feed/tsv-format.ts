@@ -30,11 +30,19 @@ class TSVFormat {
 	}
 
 	public pcLink({ cafe24PCAddress, cafe24PCAddressApp }) {
-  	return `${this._productNo ? cafe24PCAddress : cafe24PCAddressApp}${this._productNo || this._id}`
+  	const url = new URL(`${this._productNo ? cafe24PCAddress : cafe24PCAddressApp}${this._productNo || this._id}`)
+		url.searchParams.set('utm_source', 'naver')
+		url.searchParams.set('utm_medium', 'cpc')
+		url.searchParams.set('utm_campaign', 'nfeed')
+		return url.toString()
 	}
 
 	public mobileLink({ cafe24MobileAddress, cafe24MobileAddressApp }) {
-  	return `${this._productNo ? cafe24MobileAddress : cafe24MobileAddressApp}${this._productNo || this._id}`
+		const url = new URL(`${this._productNo ? cafe24MobileAddress : cafe24MobileAddressApp}${this._productNo || this._id}`)
+		url.searchParams.set('utm_source', 'naver')
+		url.searchParams.set('utm_medium', 'cpc')
+		url.searchParams.set('utm_campaign', 'nfeed')
+		return url.toString()
 	}
 
 	public gender() {

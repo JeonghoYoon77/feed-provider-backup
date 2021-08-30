@@ -86,7 +86,22 @@ export class GoogleFeed implements iFeed {
 			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`
-		const data = await MySQL.execute(query)
+		let data = await MySQL.execute(query)
+
+		data = data.map(row => {
+			const link = new URL(row.link)
+			link.searchParams.set('utm_source', 'google')
+			link.searchParams.set('utm_medium', 'cpc')
+			link.searchParams.set('utm_campaign', 'gfeed')
+			row.link = link.toString()
+
+			const mobileLink = new URL(row.mobile_link)
+			mobileLink.searchParams.set('utm_source', 'google')
+			mobileLink.searchParams.set('utm_medium', 'cpc')
+			mobileLink.searchParams.set('utm_campaign', 'gfeed')
+			// eslint-disable-next-line camelcase
+			row.mobile_link = mobileLink.toString()
+		})
 
 		const tsv = parse(data, {
 			fields: Object.keys(data[0]),
