@@ -131,7 +131,7 @@ export class NaverFeed implements iFeed {
 			      		 )
 			       ), '\t', ' ') AS 'search_tag',
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
-			FROM naver_upload_list nul
+			FROM naver_upload_list nul USE INDEX (naver_upload_list_sequence_index)
 			    LEFT JOIN cafe24_upload_db cud on nul.item_id = cud.item_id AND cud.is_active = 1
 			    LEFT JOIN cafe24_upload_info cui on nul.item_id = cui.item_id
 			    JOIN item_info ii on nul.item_id = ii.idx
