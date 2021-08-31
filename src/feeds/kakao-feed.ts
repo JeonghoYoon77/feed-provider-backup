@@ -30,7 +30,7 @@ export class KakaoFeed implements iFeed {
 				IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price) * 100 AS 'price_mobile',
 				IF(cud.product_no, CEIL(cui.origin_final_price * 0.97 / 100) * 100, iop.total_price) * 100 AS 'normal_price',
 				IF(cud.product_no,
-				   CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', c24ud.product_no),
+				   CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no),
 				   CONCAT('https://m.fetching.co.kr/product_detail_app.html?product_no=', ii.idx)
 				) as 'link',
 				ii.image_url AS 'image_link',
@@ -88,7 +88,9 @@ export class KakaoFeed implements iFeed {
 			LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx
 			LEFT JOIN cafe24_upload_info cui on cui.item_id = ii.idx
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
-			JOIN item_price ip on ii.idx = ip.item_id
+			JOIN item_show_price isp on ii.idx = isp.item_id
+			JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
+			JOIN item_user_price iup on ii.idx = iup.item_id
 			JOIN item_origin_price iop on ii.idx = iop.item_id
 			LEFT JOIN naver_upload_list cul on ii.idx = cul.item_id
 			JOIN fetching_category fc on (
@@ -100,6 +102,7 @@ export class KakaoFeed implements iFeed {
 				ORDER BY fc.idx DESC
 				LIMIT 1
 			) = fc.idx
+			LEFT JOIN naver_upload_list nul on ii.idx = nul.item_id
 			WHERE ii.is_verify = 1
 			  AND cud.is_active = 1
 			ORDER BY nul.sequence
