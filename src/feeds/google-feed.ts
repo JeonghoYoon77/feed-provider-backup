@@ -69,9 +69,9 @@ export class GoogleFeed implements iFeed {
 			FROM item_info ii
 			LEFT JOIN naver_upload_list nul on nul.item_id = ii.idx
 			LEFT JOIN cafe24_upload_db c24ud on ii.idx = c24ud.item_id
-			JOIN item_show_price ip on ii.idx = isp.item_id
+			JOIN item_show_price isp on ii.idx = isp.item_id
 			JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
-			JOIN item_user_price iop on ii.idx = iup.item_id
+			JOIN item_user_price iup on ii.idx = iup.item_id
 			JOIN item_origin_price iop on ii.idx = iop.item_id
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
 			JOIN fetching_category fc on (
