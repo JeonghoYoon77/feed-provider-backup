@@ -85,7 +85,7 @@ export class KakaoFeed implements iFeed {
 				bi.brand_name_kor AS 'brand_name',
 				'100% 정품, 관부가세 포함, 기한한정 세일!' AS 'event_words'
 			FROM item_info ii
-			LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx
+			LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
 			LEFT JOIN cafe24_upload_info cui on cui.item_id = ii.idx
 			JOIN brand_info bi on ii.brand_id = bi.brand_id
 			JOIN item_show_price isp on ii.idx = isp.item_id
@@ -104,7 +104,6 @@ export class KakaoFeed implements iFeed {
 			) = fc.idx
 			LEFT JOIN naver_upload_list nul on ii.idx = nul.item_id
 			WHERE ii.is_verify = 1
-			  AND cud.is_active = 1
 			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`
