@@ -86,7 +86,7 @@ export class KakaoFeed implements iFeed {
 						 '100% 정품, 관부가세 포함, 기한한정 세일!'                                                          AS 'event_words'
 			FROM item_info ii
 							 LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
-							 LEFT JOIN cafe24_upload_info cui on cui.item_id = ii.idx
+							 LEFT JOIN cafe24_upload_info cui on cui.item_id = cud.item_id
 							 JOIN brand_info bi on ii.brand_id = bi.brand_id
 							 JOIN item_show_price isp on ii.idx = isp.item_id
 							 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
@@ -108,6 +108,11 @@ export class KakaoFeed implements iFeed {
 			LIMIT ${limit}
 		`
 		const data = await MySQL.execute(query)
+
+		const insertData = data.map(row => [row.id])
+
+		await MySQL.execute('DELETE FROM kakao_upload_item')
+		await MySQL.execute('INSERT INTO kakao_upload_item (item_id) VALUES ?', [insertData])
 
 		let txt = [`<<<tocnt>>>${data.length}`]
 
