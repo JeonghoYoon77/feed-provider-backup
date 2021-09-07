@@ -2,9 +2,11 @@ import { program } from 'commander'
 import { version } from '../package.json'
 import {
 	NaverFeed,
+	NaverSalesFeed,
 	GoogleFeed,
 	KakaoFeed,
-	FacebookFeed, NaverSalesFeed,
+	KakaoUpdateFeed,
+	FacebookFeed,
 } from './feeds'
 
 program.version(version)
@@ -29,6 +31,10 @@ async function main() {
 		},
 		'KAKAO-FEED': async () => {
 			const kakaoFeed = new KakaoFeed()
+			await kakaoFeed.upload()
+		},
+		'KAKAO-UPDATE-FEED': async () => {
+			const kakaoFeed = new KakaoUpdateFeed()
 			await kakaoFeed.upload()
 		},
 		'FACEBOOK-FEED': async () => {
