@@ -1,5 +1,5 @@
 import { iFeed } from './feed'
-import { MySQL, S3Client } from '../utils'
+import {MySQL, MySQLWrite, S3Client} from '../utils'
 
 
 export class KakaoFeed implements iFeed {
@@ -12,6 +12,13 @@ export class KakaoFeed implements iFeed {
 			buffer,
 			contentType: 'text/plain'
 		})
+
+		await S3Client.upload({
+			folderName: 'feeds',
+			fileName: 'kakao-update-feed.txt',
+			buffer: new Buffer(''),
+			contentType: 'text/plain'
+		})
 		console.log(`FEED_URL: ${feedUrl}`)
 	}
 
@@ -20,89 +27,92 @@ export class KakaoFeed implements iFeed {
 	}
 
 	async getTsv() {
-		const limit = 500000
+		const limit = 1000000
 		const query = `
-			SELECT ii.idx                                                                                AS 'id',
-						 REPLACE(REPLACE(CONCAT_WS(' ', bi.brand_name_kor, IF(ii.item_gender = 'W', '여성', '남성'),
-																			 fc.fetching_category_name, ii.item_name), '
-																			 ', ''), '\t', '') AS 'title',
-						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)         AS 'price_pc',
-						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)         AS 'price_mobile',
-						 IF(cud.product_no, CEIL(cui.origin_final_price * 0.97 / 100) * 100, iop.total_price)  AS 'normal_price',
+			SELECT ii.idx                                                                               AS 'id',
+						 ii.shop_id                                                                           AS 'shop_id',
+						 ii.item_code                                                                         AS 'code',
+						 bi.main_name                                                                         AS brand_name,
+						 IF(ii.item_gender = 'W', '여성', '남성')                                                 AS gender,
+						 idsi.designer_style_id                                                               AS mpn,
+						 ii.item_name                                                                         AS 'title',
+						 ii.custom_color                                                                      AS color,
+						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_pc',
+						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_mobile',
+						 IF(cud.product_no, CEIL(cui.origin_final_price * 0.97 / 100) * 100, iop.total_price) AS 'normal_price',
 						 IF(cud.product_no,
 								CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no),
 								CONCAT('https://m.fetching.co.kr/product_detail_app.html?product_no=', ii.idx)
-								 )                                                                                 as 'link',
-						 ii.image_url                                                                          AS 'image_link',
+							 )                                                                                  as 'link',
+						 ii.image_url                                                                         AS 'image_link',
 						 (
-								 SELECT fc.fetching_category_name
-								 FROM fetching_category fc
-													JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-								 WHERE icm.item_id = ii.idx
-									 AND fc.fetching_category_depth = 0
-								 LIMIT 1
-						 )                                                                                     AS 'category_name1',
+							 SELECT fc.fetching_category_name
+							 FROM fetching_category fc
+											JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+							 WHERE icm.item_id = ii.idx
+								 AND fc.fetching_category_depth = 0
+							 LIMIT 1
+						 )                                                                                    AS 'category_name1',
 						 (
-								 SELECT fc.idx
-								 FROM fetching_category fc
-													JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-								 WHERE icm.item_id = ii.idx
-									 AND fc.fetching_category_depth = 0
-								 LIMIT 1
-						 )                                                                                     AS 'category_id1',
+							 SELECT fc.idx
+							 FROM fetching_category fc
+											JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+							 WHERE icm.item_id = ii.idx
+								 AND fc.fetching_category_depth = 0
+							 LIMIT 1
+						 )                                                                                    AS 'category_id1',
 						 (
-								 SELECT fc.fetching_category_name
-								 FROM fetching_category fc
-													JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-								 WHERE icm.item_id = ii.idx
-									 AND fc.fetching_category_depth = 1
-								 LIMIT 1
-						 )                                                                                     AS 'category_name2',
+							 SELECT fc.fetching_category_name
+							 FROM fetching_category fc
+											JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+							 WHERE icm.item_id = ii.idx
+								 AND fc.fetching_category_depth = 1
+							 LIMIT 1
+						 )                                                                                    AS 'category_name2',
 						 (
-								 SELECT fc.idx
-								 FROM fetching_category fc
-													JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-								 WHERE icm.item_id = ii.idx
-									 AND fc.fetching_category_depth = 1
-								 LIMIT 1
-						 )                                                                                     AS 'category_id2',
+							 SELECT fc.idx
+							 FROM fetching_category fc
+											JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+							 WHERE icm.item_id = ii.idx
+								 AND fc.fetching_category_depth = 1
+							 LIMIT 1
+						 )                                                                                    AS 'category_id2',
 						 (
-								 SELECT fc.fetching_category_name
-								 FROM fetching_category fc
-													JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-								 WHERE icm.item_id = ii.idx
-									 AND fc.fetching_category_depth = 2
-								 LIMIT 1
-						 )                                                                                     AS 'category_name3',
+							 SELECT fc.fetching_category_name
+							 FROM fetching_category fc
+											JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+							 WHERE icm.item_id = ii.idx
+								 AND fc.fetching_category_depth = 2
+							 LIMIT 1
+						 )                                                                                    AS 'category_name3',
 						 (
-								 SELECT fc.idx
-								 FROM fetching_category fc
-													JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-								 WHERE icm.item_id = ii.idx
-									 AND fc.fetching_category_depth = 2
-								 LIMIT 1
-						 )                                                                                     AS 'category_id3',
-						 bi.brand_name_kor                                                                     AS 'brand_name',
-						 '100% 정품, 관부가세 포함, 기한한정 세일!'                                                          AS 'event_words'
+							 SELECT fc.idx
+							 FROM fetching_category fc
+											JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+							 WHERE icm.item_id = ii.idx
+								 AND fc.fetching_category_depth = 2
+							 LIMIT 1
+						 )                                                                                    AS 'category_id3',
+						 '100% 정품, 관부가세 포함, 기한한정 세일!'                                                    AS 'event_words'
 			FROM item_info ii
-							 LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
-							 LEFT JOIN cafe24_upload_info cui on cui.item_id = cud.item_id
-							 JOIN brand_info bi on ii.brand_id = bi.brand_id
-							 JOIN item_show_price isp on ii.idx = isp.item_id
-							 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
-							 JOIN item_user_price iup on ii.idx = iup.item_id
-							 JOIN item_origin_price iop on ii.idx = iop.item_id
-							 LEFT JOIN naver_upload_list cul on ii.idx = cul.item_id
-							 JOIN fetching_category fc on (
-																								SELECT icm.fetching_category_id
-																								FROM fetching_category fc
-																												 JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-																								WHERE icm.item_id = ii.idx
-																									AND fc.fetching_category_name != '기타'
-																								ORDER BY fc.idx DESC
-																								LIMIT 1
-																						) = fc.idx
-							 LEFT JOIN naver_upload_list nul on ii.idx = nul.item_id
+						 LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
+						 LEFT JOIN cafe24_upload_info cui on cui.item_id = cud.item_id
+						 LEFT JOIN item_designer_style_id idsi on idsi.item_id = ii.idx
+						 JOIN brand_info bi on ii.brand_id = bi.brand_id
+						 JOIN item_show_price isp on ii.idx = isp.item_id
+						 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
+						 JOIN item_user_price iup on ii.idx = iup.item_id
+						 JOIN item_origin_price iop on ii.idx = iop.item_id
+						 JOIN fetching_category fc on (
+																						SELECT icm.fetching_category_id
+																						FROM fetching_category fc
+																									 JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+																						WHERE icm.item_id = ii.idx
+																							AND fc.fetching_category_name != '기타'
+																						ORDER BY fc.idx DESC
+																						LIMIT 1
+																					) = fc.idx
+						 LEFT JOIN naver_upload_list nul on ii.idx = nul.item_id
 			WHERE ii.is_verify = 1
 			ORDER BY nul.sequence
 			LIMIT ${limit}
@@ -111,12 +121,31 @@ export class KakaoFeed implements iFeed {
 
 		const insertData = data.map(row => [row.id])
 
-		await MySQL.execute('DELETE FROM kakao_upload_item')
-		await MySQL.execute('INSERT INTO kakao_upload_item (item_id) VALUES ?', [insertData])
+		await MySQLWrite.execute('DELETE FROM kakao_upload_item')
+		await MySQLWrite.execute(`
+			INSERT INTO kakao_upload_item (item_id, final_price)
+			SELECT idx, final_price
+			FROM item_info ii
+						 JOIN item_show_price isp on ii.idx = isp.item_id
+						 JOIN item_price ip ON ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
+			WHERE ii.idx IN (?);	
+		`, [insertData])
 
 		let txt = [`<<<tocnt>>>${data.length}`]
 
 		data.forEach((row) => {
+			if (row.title.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) row.title = row.category_name3 === '기타' ? row.category_name2 : row.category_name3
+			row.title = row.title.trim()
+
+			let title = `${row.brand_name} ${row.gender} ${row.title} ${row.mpn ? row.mpn : [72, 78, 80].includes(row.shop_id) ? '' : row.item_code} ${row.color?.replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ').toUpperCase().trim()}`
+				.split(' ').filter(str => str).join(' ')
+
+			title = title.replace('è', 'e')
+			title = title.replace('É', 'E')
+			title = title.split('\n').join('')
+
+			row.title = title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
+
 			row.link = new URL(row.link)
 			row.link.searchParams.set('utm_source', 'daum')
 			row.link.searchParams.set('utm_medium', 'cpc')
