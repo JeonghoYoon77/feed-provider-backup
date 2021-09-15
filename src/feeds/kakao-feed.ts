@@ -16,7 +16,7 @@ export class KakaoFeed implements iFeed {
 		await S3Client.upload({
 			folderName: 'feeds',
 			fileName: 'kakao-update-feed.txt',
-			buffer: new Buffer(''),
+			buffer: Buffer.from(''),
 			contentType: 'text/plain'
 		})
 		console.log(`FEED_URL: ${feedUrl}`)
@@ -134,10 +134,10 @@ export class KakaoFeed implements iFeed {
 		let txt = [`<<<tocnt>>>${data.length}`]
 
 		data.forEach((row) => {
-			if (row.title.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) row.title = row.category_name3 === '기타' ? row.category_name2 : row.category_name3
+			if (row.title.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) row.title = (!row.category_name3 || row.category_name3 === '기타') ? row.category_name2 : row.category_name3
 			row.title = row.title.trim()
 
-			let title = `${row.brand_name} ${row.gender} ${row.title} ${row.mpn ? row.mpn : [72, 78, 80].includes(row.shop_id) ? '' : row.item_code} ${row.color?.replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ').toUpperCase().trim()}`
+			let title = `${row.brand_name} ${row.gender} ${row.title} ${row.mpn ? row.mpn : [72, 78, 80].includes(row.shop_id) ? '' : row.code} ${(row.color || '').replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ').toUpperCase().trim()}`
 				.split(' ').filter(str => str).join(' ')
 
 			title = title.replace('è', 'e')
