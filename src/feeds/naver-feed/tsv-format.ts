@@ -79,13 +79,7 @@ class TSVFormat {
 
 		rawPrice *= 0.97
 
-		if (price >= 1000000) {
-			rawPrice -= 30000
-		} else if (price >= 300000) {
-			rawPrice -= 20000
-		} else if (price >= 200000) {
-			rawPrice -= 5000
-		}
+		if (rawPrice >= 300000) rawPrice -= 10000
 
 		return Math.ceil(rawPrice / 100) * 100
 	}
