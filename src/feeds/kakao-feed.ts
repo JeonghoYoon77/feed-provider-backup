@@ -27,7 +27,7 @@ export class KakaoFeed implements iFeed {
 	}
 
 	async getTsv() {
-		const limit = 1000000
+		const limit = 500000
 		const query = `
 			SELECT ii.idx                                                                               AS 'id',
 						 ii.shop_id                                                                           AS 'shop_id',
