@@ -37,6 +37,7 @@ export class KakaoFeed implements iFeed {
 						 idsi.designer_style_id                                                               AS mpn,
 						 ii.item_name                                                                         AS 'title',
 						 ii.custom_color                                                                      AS color,
+						 ip.final_price                                                                       AS original_price,
 						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_pc',
 						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_mobile',
 						 IF(cud.product_no, CEIL(cui.origin_final_price * 0.97 / 100) * 100, iop.total_price) AS 'normal_price',
@@ -93,7 +94,7 @@ export class KakaoFeed implements iFeed {
 								 AND fc.fetching_category_depth = 2
 							 LIMIT 1
 						 )                                                                                    AS 'category_id3',
-						 '100% 정품, 관부가세 포함, 기한한정 세일!'                                                    AS 'event_words'
+						 '100% 정품, 관부가세 포함, 기한한정 세일!'                                                         AS 'event_words'
 			FROM item_info ii
 						 LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
 						 LEFT JOIN cafe24_upload_info cui on cui.item_id = cud.item_id
@@ -119,16 +120,12 @@ export class KakaoFeed implements iFeed {
 		`
 		const data = await MySQL.execute(query)
 
-		const insertData = data.map(row => [row.id])
+		const insertData = data.map(row => [row.id, row.original_price])
 
 		await MySQLWrite.execute('DELETE FROM kakao_upload_item')
 		await MySQLWrite.execute(`
 			INSERT INTO kakao_upload_item (item_id, final_price)
-			SELECT idx, final_price
-			FROM item_info ii
-						 JOIN item_show_price isp on ii.idx = isp.item_id
-						 JOIN item_price ip ON ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
-			WHERE ii.idx IN (?);	
+			VALUES ?;	
 		`, [insertData])
 
 		let txt = [`<<<tocnt>>>${data.length}`]
