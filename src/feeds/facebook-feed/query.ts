@@ -25,7 +25,7 @@ ON ii.idx = isp.item_id
 JOIN item_price ip
 ON ii.idx = ip.item_id AND ip.price_rule = isp.price_rule 
 
-WHERE ii.is_verify = 1
+WHERE ii.is_sellable = 1
 AND ii.item_priority > 0
 ORDER BY ii.item_priority DESC
 LIMIT ${limit};

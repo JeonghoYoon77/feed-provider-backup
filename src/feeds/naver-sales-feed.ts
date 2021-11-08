@@ -63,7 +63,7 @@ export class NaverSalesFeed implements iFeed {
 			    JOIN fetching_category fc ON icm.fetching_category_id = fc.idx
 			    LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
 			WHERE fc.fetching_category_depth = 2
-			AND ii.is_verify
+			AND ii.is_sellable
 			ORDER BY nul.sequence
 			LIMIT ?
 		`

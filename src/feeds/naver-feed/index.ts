@@ -154,7 +154,7 @@ export class NaverFeed implements iFeed {
 			    LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx
 			    LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
 					LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
-			WHERE ii.is_verify = 1
+			WHERE ii.is_sellable = 1 AND ii.is_show = 1
 				AND NOT (bi.brand_id = 17 AND (fc.idx IN (17, 21) OR fc.fetching_category_parent_id IN (17, 21)))
 			ORDER BY nul.sequence
 			LIMIT ?

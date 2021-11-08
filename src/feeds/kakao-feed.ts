@@ -114,7 +114,7 @@ export class KakaoFeed implements iFeed {
 																						LIMIT 1
 																					) = fc.idx
 						 LEFT JOIN naver_upload_list nul on ii.idx = nul.item_id
-			WHERE ii.is_verify = 1
+			WHERE ii.is_sellable = 1
 			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`

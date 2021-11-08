@@ -111,7 +111,7 @@ export class KakaoUpdateFeed implements iFeed {
 																						LIMIT 1
 																					) = fc.idx
 						 LEFT JOIN naver_upload_list nul on ii.idx = nul.item_id
-			WHERE ii.is_verify = 0 OR ip.final_price != kui.final_price
+			WHERE ii.is_verify = 0 OR ii.is_show = 0 OR ip.final_price != kui.final_price
 			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`

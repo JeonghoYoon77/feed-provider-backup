@@ -83,6 +83,7 @@ export class GoogleFeed implements iFeed {
 				ORDER BY icm.fetching_category_id DESC
 				LIMIT 1
 			) = fc.idx
+			WHERE ii.is_sellable
 			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`
