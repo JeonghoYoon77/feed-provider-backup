@@ -90,7 +90,7 @@ export class KakaoUpdateFeed implements iFeed {
 						 bi.brand_name_kor                                                                    AS 'brand_name',
 						 '100% 정품, 관부가세 포함, 기한한정 세일!'                                                         AS 'event_words',
 						 ii.updated_at,
-						 ii.is_verify
+						 ii.is_sellable
 			FROM item_info ii
 						 JOIN kakao_upload_item kui on ii.idx = kui.item_id
 						 LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
@@ -111,7 +111,7 @@ export class KakaoUpdateFeed implements iFeed {
 																						LIMIT 1
 																					) = fc.idx
 						 LEFT JOIN naver_upload_list nul on ii.idx = nul.item_id
-			WHERE ii.is_verify = 0 OR ii.is_show = 0 OR ip.final_price != kui.final_price
+			WHERE ii.is_sellable = 0 OR ii.is_show = 0 OR ip.final_price != kui.final_price
 			ORDER BY nul.sequence
 			LIMIT ${limit}
 		`
@@ -131,7 +131,7 @@ export class KakaoUpdateFeed implements iFeed {
 
 			row.title = title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
 
-		  if (row.is_verify) {
+		  if (row.is_sellable) {
 				txt.push(`<<<begin>>>
 <<<mapid>>>${row.id}
 <<<price>>>${row.price_pc}
