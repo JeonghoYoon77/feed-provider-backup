@@ -3,7 +3,7 @@ import bluebird from 'bluebird'
 import { MYSQL } from '../config'
 
 const connectionPool = createPool({
-	host: MYSQL.HOST,
+	host: MYSQL.READ_HOST,
 	port: MYSQL.PORT,
 	database: MYSQL.DATABASE.DEFAULT,
 	user: MYSQL.USER,
@@ -14,7 +14,7 @@ const connectionPool = createPool({
 	timezone: '+00:00', // DB에 저장된 시간 그대로 받아오기 위해서
 })
 const connectionPoolWrite = createPool({
-	host: MYSQL.HOST.replace('fetching-db-read', 'fetching-db'),
+	host: MYSQL.HOST,
 	port: MYSQL.PORT,
 	database: MYSQL.DATABASE.DEFAULT,
 	user: MYSQL.USER,

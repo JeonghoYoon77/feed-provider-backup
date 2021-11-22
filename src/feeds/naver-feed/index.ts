@@ -140,8 +140,8 @@ export class NaverFeed implements iFeed {
 			    JOIN country_info ci on ii.item_country = ci.country_tag
 			    JOIN brand_info bi on ii.brand_id = bi.brand_id
 			    JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
-					JOIN item_user_price iup on ii.idx = iup.item_id
-			    JOIN item_origin_price iop on ii.idx = iop.item_id
+					JOIN item_user_price iup on ii.idx = iup.item_id AND si.shop_id = iup.price_rule
+			    JOIN item_origin_price iop on ii.idx = iop.item_id AND si.shop_id = iop.price_rule
 			    JOIN fetching_category fc on (
 			        SELECT icm.fetching_category_id
 			        FROM fetching_category fc
