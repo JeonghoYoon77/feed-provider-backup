@@ -77,9 +77,7 @@ class TSVFormat {
 	price(price: number): number {
 		let rawPrice = price
 
-		rawPrice *= 0.97
-
-		if (rawPrice >= 300000) rawPrice -= 10000
+		rawPrice *= 0.95
 
 		return Math.ceil(rawPrice / 100) * 100
 	}
