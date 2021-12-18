@@ -7,8 +7,8 @@ class Constants {
   private _condition: string = '신상품'
   private _shipping: number = 0
   private _includesVat: string = 'Y'
-  private _eventWords: string = '200% 정품 보상, 관부가세 포함, 무통장입금 추가할인'
-  private _eventWordsApp: string = '200% 정품 보상, 관부가세 포함, 기한한정 세일'
+  private _eventWords: string = '200% 정품 보상, 관부가세 포함, 5% 할인 쿠폰'
+  private _eventWordsApp: string = '200% 정품 보상, 관부가세 포함, 5% 할인 쿠폰'
 
   public limit(): number {
   	return this._limit
