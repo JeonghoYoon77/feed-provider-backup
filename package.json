@@ -5,7 +5,7 @@
   "main": "src/app.ts",
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && node --max-old-space-size=4096 dist/src/app.js",
+    "start": "npm run build && node --max-old-space-size=7168 dist/src/app.js",
     "test": "jest --config ./test/jest-e2e.json --forceExit",
     "lint": "eslint --ext .js,.ts ./src",
     "lint:fix": "eslint --fix --ext .js,.ts ./src"
