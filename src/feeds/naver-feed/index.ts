@@ -41,7 +41,6 @@ export class NaverFeed implements iFeed {
 	private static query(): string {
 		return format(`
 			SELECT ii.idx AS 'id',
-			       cud.product_no AS product_no,
 			       ii.shop_id AS shop_id,
 						 ii.item_code AS item_code,
 				
@@ -58,8 +57,8 @@ export class NaverFeed implements iFeed {
 			       
 			       ci.country_name,
 				
-			       cui.final_price AS 'ip_final_price',
-			       cui.origin_final_price AS 'iop_final_price',
+			       ip.final_price AS 'ip_final_price',
+			       iop.final_price AS 'iop_final_price',
 
 						 iup.total_price AS 'iup_total_price',
 						 iop.total_price AS 'iop_total_price',

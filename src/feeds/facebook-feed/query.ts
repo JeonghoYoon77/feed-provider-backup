@@ -4,8 +4,8 @@ SELECT
   ii.idx,
   ii.item_name,
   ii.item_description,
-  IF(cud.product_no, ip.final_price, iup.total_price) as final_price,
-  cud.product_no,
+  ip.final_price as final_price,
+  ii.idx as product_no,
   ii.image_url,
   ii.brand_name
 FROM item_info ii
