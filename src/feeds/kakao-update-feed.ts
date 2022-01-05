@@ -31,13 +31,11 @@ export class KakaoUpdateFeed implements iFeed {
 						 idsi.designer_style_id                                                               AS mpn,
 						 ii.item_name                                                                         AS 'title',
 						 ii.custom_color                                                                      AS color,
-						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_pc',
-						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_mobile',
-						 IF(cud.product_no, CEIL(cui.origin_final_price * 0.97 / 100) * 100, iop.total_price) AS 'normal_price',
-						 IF(cud.product_no,
-								CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no),
-								CONCAT('https://m.fetching.co.kr/product_detail_app.html?product_no=', ii.idx)
-							 )                                                                                  as 'link',
+						 ip.final_price                                                                       AS original_price,
+						 CEIL(ip.final_price * 0.95 / 100) * 100                                             AS 'price_pc',
+						 CEIL(ip.final_price * 0.95 / 100) * 100                                             AS 'price_mobile',
+						 CEIL(iop.final_price * 0.95 / 100) * 100                                      AS 'normal_price',
+						 CONCAT('https://fetching.co.kr/product/', ii.idx)                                    as 'link',
 						 ii.image_url                                                                         AS 'image_link',
 						 (
 							 SELECT fc.fetching_category_name
@@ -93,14 +91,12 @@ export class KakaoUpdateFeed implements iFeed {
 						 ii.is_sellable
 			FROM item_info ii
 						 JOIN kakao_upload_item kui on ii.idx = kui.item_id
-						 LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
-						 LEFT JOIN cafe24_upload_info cui on cui.item_id = cud.item_id
 						 LEFT JOIN item_designer_style_id idsi on idsi.item_id = ii.idx
 						 JOIN brand_info bi on ii.brand_id = bi.brand_id
 						 JOIN item_show_price isp on ii.idx = isp.item_id
 						 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
-						 JOIN item_user_price iup on ii.idx = iup.item_id
-						 JOIN item_origin_price iop on ii.idx = iop.item_id
+						 JOIN item_user_price iup on ii.idx = iup.item_id AND ii.shop_id = iup.price_rule
+						 JOIN item_origin_price iop on ii.idx = iop.item_id AND ii.shop_id = iop.price_rule
 						 JOIN fetching_category fc on (
 																						SELECT icm.fetching_category_id
 																						FROM fetching_category fc

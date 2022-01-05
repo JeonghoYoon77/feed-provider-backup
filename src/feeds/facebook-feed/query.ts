@@ -13,9 +13,6 @@ FROM item_info ii
 JOIN naver_upload_list nul
 ON nul.item_id = ii.idx
 
-LEFT JOIN cafe24_upload_db cud
-ON cud.item_id = ii.idx AND cud.is_active = 1
-
 JOIN item_show_price isp
 ON ii.idx = isp.item_id
 

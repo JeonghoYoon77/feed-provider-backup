@@ -29,16 +29,8 @@ class TSVFormat {
 		return title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
 	}
 
-	public pcLink({ cafe24PCAddress, cafe24PCAddressApp }) {
-		const url = new URL(`${this._productNo ? cafe24PCAddress : cafe24PCAddressApp}${this._productNo || this._id}`)
-		url.searchParams.set('utm_source', 'naver')
-		url.searchParams.set('utm_medium', 'cpc')
-		url.searchParams.set('utm_campaign', 'nfeed')
-		return url.toString()
-	}
-
-	public mobileLink({ cafe24MobileAddress, cafe24MobileAddressApp }) {
-		const url = new URL(`${this._productNo ? cafe24MobileAddress : cafe24MobileAddressApp}${this._productNo || this._id}`)
+	public link({ address }) {
+		const url = new URL(`${address}${this._id}`)
 		url.searchParams.set('utm_source', 'naver')
 		url.searchParams.set('utm_medium', 'cpc')
 		url.searchParams.set('utm_campaign', 'nfeed')
@@ -83,25 +75,11 @@ class TSVFormat {
 	}
 
 	partnerCouponDownload(price: any) {
-		if (price >= 1000000) {
-			return 'Y'
-		} else if (price >= 300000) {
-			return '' // 쿠폰 자동 적용됨
-		} else if (price >= 200000) {
-			return 'Y'
-		}
-
-		return '' // 쿠폰 없음
+		return 'Y' // 쿠폰 없음
 	}
 
 	coupon(price: any) {
-		if (price >= 1000000) {
-			return '30000원'
-		} else if (price >= 300000) {
-			return '20000원'
-		} else if (price >= 200000) {
-			return '5000원'
-		}
+		return '5%'
 	}
 }
 

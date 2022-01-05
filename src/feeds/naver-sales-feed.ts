@@ -47,8 +47,6 @@ export class NaverSalesFeed implements iFeed {
 			                GROUP BY itemId
 			            ) o ON i.itemId = o.itemId
 			            JOIN item_info ii ON ii.idx = i.itemId
-			            JOIN cafe24_upload_list cul on ii.idx = cul.item_id
-			            JOIN cafe24_upload_db cud on cul.item_id = cud.item_id
 			        WHERE i.\`from\` = 'NAVER'
 			          AND date > ? AND date < ?
 			          AND i.itemId != 0

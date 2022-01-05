@@ -38,13 +38,10 @@ export class KakaoFeed implements iFeed {
 						 ii.item_name                                                                         AS 'title',
 						 ii.custom_color                                                                      AS color,
 						 ip.final_price                                                                       AS original_price,
-						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_pc',
-						 IF(cud.product_no, CEIL(cui.final_price * 0.97 / 100) * 100, iup.total_price)        AS 'price_mobile',
-						 IF(cud.product_no, CEIL(cui.origin_final_price * 0.97 / 100) * 100, iop.total_price) AS 'normal_price',
-						 IF(cud.product_no,
-								CONCAT('https://m.fetching.co.kr/product/detail.html?product_no=', cud.product_no),
-								CONCAT('https://m.fetching.co.kr/product_detail_app.html?product_no=', ii.idx)
-							 )                                                                                  as 'link',
+						 CEIL(ip.final_price * 0.95 / 100) * 100                                             AS 'price_pc',
+						 CEIL(ip.final_price * 0.95 / 100) * 100                                             AS 'price_mobile',
+						 CEIL(iop.final_price * 0.95 / 100) * 100                                      AS 'normal_price',
+						 CONCAT('https://fetching.co.kr/product/', ii.idx)                                    as 'link',
 						 ii.image_url                                                                         AS 'image_link',
 						 (
 							 SELECT fc.fetching_category_name
@@ -96,8 +93,6 @@ export class KakaoFeed implements iFeed {
 						 )                                                                                    AS 'category_id3',
 						 '100% 정품, 관부가세 포함, 기한한정 세일!'                                                         AS 'event_words'
 			FROM item_info ii
-						 LEFT JOIN cafe24_upload_db cud on cud.item_id = ii.idx AND cud.is_active = 1
-						 LEFT JOIN cafe24_upload_info cui on cui.item_id = cud.item_id
 						 LEFT JOIN item_designer_style_id idsi on idsi.item_id = ii.idx
 						 JOIN brand_info bi on ii.brand_id = bi.brand_id
 						 JOIN item_show_price isp on ii.idx = isp.item_id

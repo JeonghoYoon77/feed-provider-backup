@@ -9,8 +9,7 @@ export class Form {
   private condition: string = 'new';
 	private currency: string = 'KRW';
   private price: number;
-	private linkPrefix: string = 'https://fetching.co.kr/product/detail.html?product_no=';
-	private linkPrefix2: string = 'https://fetching.co.kr/product_detail_app.html?product_no=';
+	private linkPrefix: string = 'https://fetching.co.kr/product/';
   private productNo: number;
   private image_link: string;
   private brand: string;
@@ -41,7 +40,7 @@ export class Form {
   		availability: this.availability,
   		condition: this.condition,
   		price: `${this.price}${this.currency}`,
-  		link: this.productNo ? `${this.linkPrefix}${this.productNo}` : `${this.linkPrefix2}${this.id}`,
+  		link: `${this.linkPrefix}${this.id}`,
   		image_link: this.image_link,
   		brand: this.brand,
   	}
