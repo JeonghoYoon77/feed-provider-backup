@@ -129,9 +129,11 @@ export class NaverFeed implements iFeed {
 			               LIMIT 1 OFFSET 2
 			      		 )
 			       ), '\t', ' ') AS 'search_tag',
+			       (SELECT COUNT(*) FROM cafe24_review cr WHERE cud.product_code = cr.code) AS review_count,
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM naver_upload_list nul USE INDEX (naver_upload_list_sequence_index)
 			    JOIN item_info ii on nul.item_id = ii.idx
+			    LEFT JOIN cafe24_upload_db cud ON cud.item_id = nul.item_id
 					JOIN item_show_price isp on ii.idx = isp.item_id
 			    JOIN shop_info si on ii.shop_id = si.shop_id
 			    JOIN country_info ci on ii.item_country = ci.country_tag
@@ -214,6 +216,7 @@ export class NaverFeed implements iFeed {
 			'manufacture_define_number': row.designer_style_id || '',
 			'naver_product_id': row.naver_product_id || '',
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
+			'review_count': row.review_count,
 			shipping: constants.shipping(),
 			'import_flag': row.shop_type === '해외편집샵' ? row.import_flag : 'N',
 			'option_detail': row.option_detail.split('\n').filter(str => str).join(' '),

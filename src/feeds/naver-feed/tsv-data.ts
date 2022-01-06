@@ -17,7 +17,8 @@ type TSVData = {
   'import_flag': string
   'manufacture_define_number': string
   'brand': string
-  'origin': string
+  'origin': string,
+  'review_count': number,
   'event_words': string
   coupon: string
   'partner_coupon_download': string
