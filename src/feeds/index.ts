@@ -4,4 +4,4 @@ export * from './kakao-feed'
 export * from './kakao-update-feed'
 export * from './naver-feed'
 export * from './naver-sales-feed'
-
+export * from './piclick-feed'
