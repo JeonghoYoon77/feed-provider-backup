@@ -31,9 +31,9 @@ class TSVFormat {
 
 	public link({ address }) {
 		const url = new URL(`${address}${this._id}`)
-		url.searchParams.set('utm_source', 'naver')
-		url.searchParams.set('utm_medium', 'cpc')
-		url.searchParams.set('utm_campaign', 'nfeed')
+		url.searchParams.set('utm_source', 'piclick')
+		url.searchParams.set('utm_medium', 'referral')
+		url.searchParams.set('utm_campaign', 'piclickrecommend')
 		return url.toString()
 	}
 

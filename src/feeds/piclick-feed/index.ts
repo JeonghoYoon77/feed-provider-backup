@@ -36,7 +36,7 @@ export class PiclickFeed implements iFeed {
 		for (let skip = 0; true; skip += 100000) {
 			const data = await MySQL.execute(PiclickFeed.query(100000, skip, bookmark))
 			bookmark = data[data.length - 1].id
-			const tsvData: TSVData[] = await Promise.all(data.map(PiclickFeed.makeRow))
+			const tsvData: TSVData[] = (await Promise.all(data.map(PiclickFeed.makeRow))).filter(row => row)
 			console.log(data.length, bookmark)
 
 			fs.appendFileSync('./piclick-feed.csv', parse(tsvData, {
@@ -169,68 +169,72 @@ export class PiclickFeed implements iFeed {
 	}
 
 	private static async makeRow(row): Promise<TSVData> {
-		const tsvFormat = new TSVFormat({
-			itemGender: row.item_gender,
-			id: row.id,
-			productNo: row.product_no,
-			shopId: row.shop_id
-		})
-		const title: string = await tsvFormat.title({
-			shopId: row.shop_id,
-			itemCode: row.item_code,
-			mainName: row.main_name,
-			lastCategory: row.category_name3 === '기타' ? row.category_name2 : row.category_name3,
-			itemName: row.item_name,
-			customColor: row.custom_color,
-			mpn: row.designer_style_id,
-		})
-		const pcLink: string = tsvFormat.link({
-			address: constants.address(),
-		})
-		const mobileLink: string = tsvFormat.link({
-			address: constants.address(),
-		})
-		const searchTag: string = tsvFormat.searchTag({
-			itemName: row.item_name,
-			brandMainName: row.main_name,
-			categoryName2: row.category_name2,
-			categoryName3: row.category_name3,
-		})
+		try {
+			const tsvFormat = new TSVFormat({
+				itemGender: row.item_gender,
+				id: row.id,
+				productNo: row.product_no,
+				shopId: row.shop_id
+			})
+			const title: string = await tsvFormat.title({
+				shopId: row.shop_id,
+				itemCode: row.item_code,
+				mainName: row.main_name,
+				lastCategory: row.category_name3 === '기타' ? row.category_name2 : row.category_name3,
+				itemName: row.item_name,
+				customColor: row.custom_color,
+				mpn: row.designer_style_id,
+			})
+			const pcLink: string = tsvFormat.link({
+				address: constants.address(),
+			})
+			const mobileLink: string = tsvFormat.link({
+				address: constants.address(),
+			})
+			const searchTag: string = tsvFormat.searchTag({
+				itemName: row.item_name,
+				brandMainName: row.main_name,
+				categoryName2: row.category_name2,
+				categoryName3: row.category_name3,
+			})
 
-		let price = tsvFormat.price(row.ip_final_price)
-		let point = Math.floor(price * 0.02)
+			let price = tsvFormat.price(row.ip_final_price)
+			let point = Math.floor(price * 0.02)
 
-		return {
-			id: `F${row.id}`,
-			title,
-			'price_pc': price,
-			'price_mobile': price,
-			'normal_price': row.iop_final_price,
-			link: pcLink,
-			'mobile_link': mobileLink,
-			'image_link': row.image_link,
-			'add_image_link': row.add_image_link,
-			'category_name1': row.category_name1,
-			'category_name2': row.category_name2,
-			'category_name3': row.category_name3,
-			'naver_category': row.naver_category,
-			condition: constants.condition(),
-			'brand': row.main_name,
-			'event_words': constants.eventWords(),
-			coupon: tsvFormat.coupon(row.ip_final_price),
-			'partner_coupon_download': row.product_no ? tsvFormat.partnerCouponDownload(row.ip_final_price) : '',
-			'interest_free_event': '삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~6',
-			point,
-			'manufacture_define_number': row.designer_style_id || '',
-			'naver_product_id': row.naver_product_id || '',
-			origin: row.country_name === 'Unknown' ? '' : row.country_name,
-			'review_count': row.review_count,
-			shipping: constants.shipping(),
-			'import_flag': row.shop_type === '해외편집샵' ? row.import_flag : 'N',
-			'option_detail': row.option_detail.split('\n').filter(str => str).join(' '),
-			gender: tsvFormat.gender(),
-			'includes_vat': constants.includesVat(),
-			'search_tag': searchTag
+			return {
+				id: `F${row.id}`,
+				title,
+				'price_pc': price,
+				'price_mobile': price,
+				'normal_price': row.iop_final_price,
+				link: pcLink,
+				'mobile_link': mobileLink,
+				'image_link': row.image_link,
+				'add_image_link': row.add_image_link,
+				'category_name1': row.category_name1,
+				'category_name2': row.category_name2,
+				'category_name3': row.category_name3,
+				'naver_category': row.naver_category,
+				condition: constants.condition(),
+				'brand': row.main_name,
+				'event_words': constants.eventWords(),
+				coupon: tsvFormat.coupon(row.ip_final_price),
+				'partner_coupon_download': row.product_no ? tsvFormat.partnerCouponDownload(row.ip_final_price) : '',
+				'interest_free_event': '삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~6',
+				point,
+				'manufacture_define_number': row.designer_style_id || '',
+				'naver_product_id': row.naver_product_id || '',
+				origin: row.country_name === 'Unknown' ? '' : row.country_name,
+				'review_count': row.review_count,
+				shipping: constants.shipping(),
+				'import_flag': row.shop_type === '해외편집샵' ? row.import_flag : 'N',
+				'option_detail': row.option_detail.split('\n').filter(str => str).join(' '),
+				gender: tsvFormat.gender(),
+				'includes_vat': constants.includesVat(),
+				'search_tag': searchTag
+			}
+		} catch {
+			return null
 		}
 	}
 }
