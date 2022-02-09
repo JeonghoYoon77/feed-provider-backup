@@ -60,25 +60,28 @@ export class GoogleFeed implements iFeed {
 				'no' as 'adult',
 				IF(ii.item_gender = 'W', 'female', 'male') as 'gender',
 				ii.idx as 'item_group_id'
-			FROM item_info ii
-			LEFT JOIN naver_upload_list nul on nul.item_id = ii.idx
-			JOIN item_show_price isp on ii.idx = isp.item_id
-			JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
-			JOIN item_user_price iup on ii.idx = iup.item_id
-			JOIN item_origin_price iop on ii.idx = iop.item_id
-			JOIN brand_info bi on ii.brand_id = bi.brand_id
-			JOIN fetching_category fc on (
-				SELECT icm.fetching_category_id
-				FROM item_category_map icm
-				JOIN fetching_category fc on icm.fetching_category_id = fc.idx
-				WHERE icm.item_id = ii.idx
-					AND fc.google_category_id IS NOT NULL
-				ORDER BY icm.fetching_category_id DESC
-				LIMIT 1
-			) = fc.idx
-			WHERE ii.is_sellable
-			ORDER BY nul.sequence
-			LIMIT ${limit}
+			FROM (SELECT ii.*
+						FROM item_info ii
+									 LEFT JOIN naver_upload_list nul on nul.item_id = ii.idx
+									 JOIN item_score score ON ii.idx = score.item_id
+						WHERE ii.is_sellable
+						ORDER BY nul.sequence, score.default_score DESC
+						LIMIT ${limit}) ii
+						 JOIN item_show_price isp on ii.idx = isp.item_id
+						 JOIN item_price ip IGNORE INDEX (item_price_final_price_index)
+									on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
+						 JOIN item_user_price iup on ii.idx = iup.item_id AND isp.price_rule = iup.price_rule
+						 JOIN item_origin_price iop on ii.idx = iop.item_id AND isp.price_rule = iop.price_rule
+						 JOIN brand_info bi on ii.brand_id = bi.brand_id
+						 JOIN fetching_category fc on (
+																						SELECT icm.fetching_category_id
+																						FROM item_category_map icm
+																									 JOIN fetching_category fc on icm.fetching_category_id = fc.idx
+																						WHERE icm.item_id = ii.idx
+																							AND fc.google_category_id IS NOT NULL
+																						ORDER BY icm.fetching_category_id DESC
+																						LIMIT 1
+																					) = fc.idx
 		`
 		let data = await MySQL.execute(query)
 
@@ -96,6 +99,8 @@ export class GoogleFeed implements iFeed {
 			// eslint-disable-next-line camelcase
 			row.mobile_link = mobileLink.toString()
 		})
+
+		console.log(data[0])
 
 		const tsv = parse(data, {
 			fields: Object.keys(data[0]),
