@@ -85,7 +85,9 @@ export class GoogleFeed implements iFeed {
 		`
 		let data = await MySQL.execute(query)
 
-		data = data.map(row => {
+
+
+		data.map(row => {
 			const link = new URL(row.link)
 			link.searchParams.set('utm_source', 'google')
 			link.searchParams.set('utm_medium', 'cpc')
