@@ -129,7 +129,7 @@ export class NaverFeed implements iFeed {
 			               LIMIT 1 OFFSET 2
 			      		 )
 			       ), '\t', ' ') AS 'search_tag',
-			       (SELECT COUNT(*) FROM cafe24_review cr WHERE cud.product_code = cr.code) AS review_count,
+			       (SELECT COUNT(*) FROM commerce.review cr WHERE ii.idx = cr.item_id) AS review_count,
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM naver_upload_list nul USE INDEX (naver_upload_list_sequence_index)
 			    JOIN item_info ii on nul.item_id = ii.idx

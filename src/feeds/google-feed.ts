@@ -102,8 +102,6 @@ export class GoogleFeed implements iFeed {
 			row.mobile_link = mobileLink.toString()
 		})
 
-		console.log(data[0])
-
 		const tsv = parse(data, {
 			fields: Object.keys(data[0]),
 			delimiter: '\t',

@@ -206,7 +206,7 @@ export class PiclickFeed implements iFeed {
 				title,
 				'price_pc': price,
 				'price_mobile': price,
-				'normal_price': row.iop_final_price,
+				'normal_price': price >= row.iop_final_price ? price : row.iop_final_price,
 				link: pcLink,
 				'mobile_link': mobileLink,
 				'image_link': row.image_link,
