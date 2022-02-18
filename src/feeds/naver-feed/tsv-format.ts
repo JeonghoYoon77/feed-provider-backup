@@ -16,7 +16,7 @@ class TSVFormat {
 	}
 
 	public async title({ shopId, itemCode, mainName, lastCategory, itemName, customColor, mpn = '',  }): Promise<string> {
-		if (itemName.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) itemName = lastCategory
+		if (itemName.search(/[ㄱ-ㅎㅏ-ㅣ가-힣A-z]/) === -1) itemName = lastCategory
 		itemName = itemName.trim()
 
 		let title = `${mainName} ${itemName} ${mpn ? mpn : [72, 78, 80].includes(shopId) ? '' : itemCode} ${this.color(customColor)}`
