@@ -27,9 +27,15 @@ export const AWS = {
 	ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
 	SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
 }
+export const ES = {
+	ENDPOINT: process.env.ES_ENDPOINT,
+	USERNAME: process.env.ES_USERNAME,
+	PASSWORD: process.env.ES_PASSWORD,
+}
 
 export default {
 	ENVIRONMENT,
 	MYSQL,
 	AWS,
+	ES,
 }

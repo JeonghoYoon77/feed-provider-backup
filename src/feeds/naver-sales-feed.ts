@@ -2,9 +2,19 @@ import { iFeed } from './feed'
 import { MySQL, S3Client } from '../utils'
 import {parse} from 'json2csv'
 import moment from 'moment'
+import {ES} from '../config'
+import {Client} from '@elastic/elasticsearch'
 
 
 export class NaverSalesFeed implements iFeed {
+	client = new Client({
+		node: ES.ENDPOINT,
+		auth: {
+			username: ES.USERNAME,
+			password: ES.PASSWORD,
+		},
+	})
+
 	async upload() {
 		const buffer = await this.getTsvBuffer()
 
@@ -21,62 +31,85 @@ export class NaverSalesFeed implements iFeed {
 	}
 
 	async getTsv() {
-		const limit = 100000
-		const targetDay = new Date()
-		targetDay.setDate(targetDay.getDate() - 1)
-		const nextDay = new Date()
-		const target = moment(targetDay).format('YYYY-MM-DD')
-		const targetEnd = moment(nextDay).format('YYYY-MM-DD')
+		const target = moment().subtract(2, 'day').format('YYYY-MM-DD')
+		const targetEnd = moment().subtract(1, 'day').format('YYYY-MM-DD')
 
-		const query = `
-			SELECT DISTINCT ii.idx AS mall_id,
-			                IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS sale_count,
-			                IFNULL(amount, 0) AS sale_price,
-			                IF(inflowTotal < orderTotal, inflowTotal, orderTotal) AS order_count,
-			                ? AS dt
-			FROM naver_upload_list nul
-			    JOIN item_info ii on nul.item_id = ii.idx
-			    JOIN (
-			        SELECT i.itemId, COUNT(*) inflowTotal, orderTotal, amount, CAST(date AS DATE)
-			        FROM fetching_logs.inflow i
-			            JOIN (
-			                SELECT itemId, COUNT(*) orderTotal, sum(amount) amount
-			                FROM fetching_logs.\`order\`
-			                WHERE date > ? AND date < ?
-			                  AND isValid != 0
-			                GROUP BY itemId
-			            ) o ON i.itemId = o.itemId
-			            JOIN item_info ii ON ii.idx = i.itemId
-			        WHERE i.\`from\` = 'NAVER'
-			          AND date > ? AND date < ?
-			          AND i.itemId != 0
-			        GROUP BY i.itemId
-			    ) i ON i.itemId = ii.idx
-			    JOIN shop_info si ON ii.shop_id = si.shop_id
-			    JOIN item_show_price isp on ii.idx = isp.item_id
-			    JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
-			    JOIN brand_info bi ON ii.brand_id = bi.brand_id
-			    JOIN item_list_for_update vu ON ii.idx = vu.item_id
-			    JOIN item_category_map icm ON ii.idx = icm.item_id
-			    JOIN fetching_category fc ON icm.fetching_category_id = fc.idx
-			    LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
-			WHERE fc.fetching_category_depth = 2
-			AND ii.is_sellable
-			ORDER BY nul.sequence
-			LIMIT ?
-		`
-		let data = await MySQL.execute(query, [
-			target, target, targetEnd, target, targetEnd, limit
-		])
+		const body = {
+			query: {
+				bool: {
+					filter: [
+						{
+							match: {
+								type: 'DETAIL',
+							},
+						},
+						{
+							match: {
+								'inflow.from.channel': 'NAVER',
+							},
+						},
+						{
+							match: {
+								'inflow.from.type': 'FEED',
+							},
+						},
+						{
+							range: {
+								createdAt: {
+									gte: target,
+									lte: targetEnd,
+								},
+							},
+						},
+					],
+				},
+			},
+		}
 
-		data = data.map((row) => {
-			/* eslint-disable camelcase */
-			row.mall_id = `F${row.mall_id}`
-			if (!row.sale_count) row.sale_count = 0
-			if (!row.order_count) row.order_count = 0
-			return row
-			/* eslint-enable camelcase */
-		})
+		const esdata = await this.client.search(
+			{
+				index: 'actions',
+				size: 10000,
+				body,
+			},
+			{ requestTimeout: 1000000 }
+		)
+
+		console.log(esdata.body.hits.hits.map(row => row._source.item[0].id))
+
+		let data: any = {}
+
+		for (let hit of esdata.body.hits.hits) {
+			const query = `
+				SELECT DISTINCT ii.idx         AS mall_id,
+												1           AS sale_count,
+												ip.final_price AS sale_price,
+												1           AS order_count,
+												?              AS dt
+				FROM item_info ii
+							 JOIN item_show_price isp on ii.idx = isp.item_id
+							 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
+				WHERE ii.idx = ?
+			`
+			let [row] = await MySQL.execute(query, [
+				targetEnd, hit._source.item[0].id
+			])
+			console.log(data)
+			if (!data[`F${row.mall_id}`]) {
+				/* eslint-disable camelcase */
+				row.mall_id = `F${row.mall_id}`
+				if (!row.sale_count) row.sale_count = 1
+				if (!row.order_count) row.order_count = 1
+				/* eslint-enable camelcase */
+
+				data[row.mall_id] = row
+			} else {
+				data[`F${row.mall_id}`].sale_count++
+				data[`F${row.mall_id}`].order_count++
+			}
+		}
+
+		data = Object.values(data)
 
 		return parse(data, {
 			fields: Object.keys(data[0]),
