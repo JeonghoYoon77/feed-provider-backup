@@ -31,10 +31,10 @@ class TSVFormat {
 
 	public link({ address }) {
 		const url = new URL(`${address}${this._id}`)
-		url.searchParams.set('utm_source', 'naver')
+		/*url.searchParams.set('utm_source', 'naver')
 		url.searchParams.set('utm_medium', 'cpc')
-		url.searchParams.set('utm_campaign', 'nfeed')
-		return url.toString()
+		url.searchParams.set('utm_campaign', 'nfeed')*/
+		return url.href
 	}
 
 	public gender() {
