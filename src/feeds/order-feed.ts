@@ -14,6 +14,8 @@ export class OrderFeed implements iFeed {
              u.name,
 						 GROUP_CONCAT(DISTINCT ii.item_name) AS itemName,
              fo.fetching_order_number,
+						 so.vendor_order_number,
+						 so.card_approval_number,
              fo.pay_amount,
              fo.status,
              fo.order_path,
@@ -22,7 +24,7 @@ export class OrderFeed implements iFeed {
              oe.order_exchange_number IS NOT NULL AS isExchanged,
              oret.order_return_number IS NOT NULL AS isReturned,
 						 oref.refund_amount AS refundAmount,
-						 JSON_ARRAYAGG(io.pay_amount_detail) AS payAmountDetail
+						 fo.pay_amount_detail AS payAmountDetail
       FROM commerce.fetching_order fo
                LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
                LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
@@ -39,59 +41,47 @@ export class OrderFeed implements iFeed {
 
 		const feed = data.map(row => {
 			const priceData: any = {}
-			row.payAmountDetail.map(detail => Object.values<any>(JSON.parse(detail)).forEach(data => {
-				data.forEach(row => {
-					if (priceData[row.type]) priceData[row.type] += row.rawValue
-					else priceData[row.type] = row.rawValue
-				})
-			}))
+			JSON.parse(row.payAmountDetail).forEach(row => {
+				if (priceData[row.type]) priceData[row.type] += row.value
+				else priceData[row.type] = row.value
+			})
 
-			const deposit = row.pay_method === 'DEPOSIT' ? row.pay_amount : 0
-			const card = row.pay_method === 'CARD' ? row.pay_amount : 0
-			const kakao = row.pay_method === 'KAKAO' ? row.pay_amount : 0
-			const naver = row.pay_method === 'NAVER' ? row.pay_amount : 0
-			const escrow = row.pay_method === 'ESCROW' ? row.pay_amount : 0
-			const escrowCard = row.pay_method === 'ESCROW_CARD' ? row.pay_amount : 0
+			let pgFee = 0
+
+			if (row.pay_method === 'CARD') pgFee = row.pay_amount * 0.014
+			else if (row.pay_method === 'KAKAO') pgFee = row.pay_amount * 0.015
+			else if (row.pay_method === 'NAVER') pgFee = row.pay_amount * 0.015
+			else if (row.pay_method === 'ESCROW') pgFee = row.pay_amount * 0.017
+			else if (row.pay_method === 'ESCROW_CARD') pgFee = row.pay_amount * 0.016
 
 			const refundAmount = row.refundAmount ?? 0
-			const salesAmount = row.pay_amount - refundAmount
-			const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
-			const pgFee = card * 0.014 + kakao * 0.015 + naver * 0.015 + escrow * 0.017 + escrowCard * 0.016
-			const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
+			// const salesAmount = row.pay_amount - refundAmount
+			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
+			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
 
-			const profit = salesAmount - totalTotalPrice
+			// const profit = salesAmount - totalTotalPrice
 
 			return {
-				createdAt: row.created_at,
-				completedAt: row.completed_at,
-				userName: row.name,
-				itemName: row.itemName,
-				fetchingOrderNumber: row.fetching_order_number,
-				amount: row.pay_amount,
-				status: null,
-				orderPath: row.order_path,
-				payMethod: row.pay_method,
-				isCanceled: row.isCanceled,
-				isExchanged: row.isExchanged,
-				isReturned: row.isReturned,
-				deposit,
-				card,
-				kakao,
-				naver,
-				escrow,
-				escrowCard,
-				returns: refundAmount,
-				salesAmount,
-				totalTotalPrice,
-				cardApprovalNumber: '',
-				totalPrice,
-				pgFee,
-				eldex: priceData.ADDITIONAL_FEE,
-				dutyAndTax: priceData.DUTY_AND_TAX,
-				purchaseReturn: 0,
-				pgFeeRefund: row.refundAmount ? pgFee : 0,
-				subtractedFee: 0,
-				profit
+				'주문일': row.created_at,
+				'구매확정일': row.completed_at,
+				'주문자': row.name,
+				'상품명': row.itemName,
+				'주문번호': row.fetching_order_number,
+				'편집샵 주문번호': row.vendor_order_number,
+				'카드 승인번호': row.card_approval_number,
+				'결제 방식': row.pay_method,
+				'페칭 판매가': priceData['ORIGIN_PRICE'],
+				'쿠폰': priceData['COUPON_DISCOUNT'] ?? 0,
+				'적립금': priceData['POINT_DISCOUNT'] ?? 0,
+				'결제가': row.pay_amount,
+				'환불금액': refundAmount,
+				'PG수수료': pgFee,
+				'엘덱스 비용': priceData.ADDITIONAL_FEE,
+				'관부가세': priceData.DUTY_AND_TAX,
+				'PG수수료 환불': row.refundAmount ? pgFee : 0,
+				'매입환출': row.refundAmount,
+				'매입환출 완료여부': 'N',
+				'반품수수료': 0
 			}
 		})
 
