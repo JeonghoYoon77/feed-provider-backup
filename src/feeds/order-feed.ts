@@ -1,6 +1,11 @@
+import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadsheet'
+import {parse} from 'json2csv'
+
+import sheetData from '../../fetching-sheet.json'
+
 import {iFeed} from './feed'
 import {MySQL, S3Client} from '../utils'
-import {parse} from 'json2csv'
+import {decryptInfo} from '../utils/privacy-encryption'
 
 export class OrderFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
@@ -8,10 +13,48 @@ export class OrderFeed implements iFeed {
 	}
 
 	async getTsv(): Promise<string> {
+		const doc = new GoogleSpreadsheet('1eb3BblL771lOxbO-tK44ULTA_Llg8oPDlAoFz2xVet8')
+
+		/* eslint-disable camelcase */
+		await doc.useServiceAccountAuth({
+			client_email: sheetData.client_email,
+			private_key: sheetData.private_key,
+		})
+		/* eslint-enable camelcase */
+
+		await doc.loadInfo()
+
+		const eldexSheet = doc.sheetsById['1342024732']
+		const cardSheet = doc.sheetsById['895507072']
+
+		const eldexRaw = await eldexSheet.getRows()
+		const cardRaw = await cardSheet.getRows()
+
+		const eldex = {}
+		const card = {}
+		const cardRefund = {}
+
+		eldexRaw.map(row => {
+			const id = row['상품명'].split(' ').pop()
+			const value = row['2차결제금액(원)'].replace(/,/g, '')
+			eldex[id] = parseInt(value)
+		})
+
+		cardRaw.map(row => {
+			const id = row['승인번호']
+			const value = parseInt(row['청구금액'].replace(/,/g, ''))
+			const refundValue = parseInt(row['전월취소및부분취소'].replace(/,/g, ''))
+			cardRefund[id] = refundValue
+			if (value > 0) card[id] = value
+			else cardRefund[id] += value
+		})
+
 		const data = await MySQL.execute(`
 		  SELECT fo.created_at,
              null as completed_at,
-             u.name,
+             od.recipient_name as name,
+						 od.phone_number as phone,
+		         si.shop_name,
 						 GROUP_CONCAT(DISTINCT ii.item_name) AS itemName,
              fo.fetching_order_number,
 						 so.vendor_order_number,
@@ -24,16 +67,19 @@ export class OrderFeed implements iFeed {
              oe.order_exchange_number IS NOT NULL AS isExchanged,
              oret.order_return_number IS NOT NULL AS isReturned,
 						 oref.refund_amount AS refundAmount,
-						 fo.pay_amount_detail AS payAmountDetail
+						 fo.pay_amount_detail AS payAmountDetail,
+						 JSON_ARRAYAGG(io.pay_amount_detail) AS itemPayAmountDetail
       FROM commerce.fetching_order fo
                LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
                LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
                LEFT JOIN commerce.order_return oret on fo.fetching_order_number = oret.fetching_order_number
 							 LEFT JOIN commerce.order_refund oref on fo.fetching_order_number = oref.fetching_order_number
+          		 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
                JOIN commerce.user u on fo.user_id = u.idx
                JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
                JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
                JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
+		  			   JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
 			WHERE fo.paid_at IS NOT NULL AND fo.deleted_at IS NULL
 			GROUP BY fo.fetching_order_number
 			ORDER BY fo.created_at ASC
@@ -48,11 +94,11 @@ export class OrderFeed implements iFeed {
 
 			let pgFee = 0
 
-			if (row.pay_method === 'CARD') pgFee = row.pay_amount * 0.014
-			else if (row.pay_method === 'KAKAO') pgFee = row.pay_amount * 0.015
-			else if (row.pay_method === 'NAVER') pgFee = row.pay_amount * 0.015
-			else if (row.pay_method === 'ESCROW') pgFee = row.pay_amount * 0.017
-			else if (row.pay_method === 'ESCROW_CARD') pgFee = row.pay_amount * 0.016
+			if (row.pay_method === 'CARD') pgFee = Math.round(row.pay_amount * 0.014)
+			else if (row.pay_method === 'KAKAO') pgFee = Math.round(row.pay_amount * 0.015)
+			else if (row.pay_method === 'NAVER') pgFee = Math.round(row.pay_amount * 0.015)
+			else if (row.pay_method === 'ESCROW') pgFee = Math.round(row.pay_amount * 0.017)
+			else if (row.pay_method === 'ESCROW_CARD') pgFee = Math.round(row.pay_amount * 0.016)
 
 			const refundAmount = row.refundAmount ?? 0
 			// const salesAmount = row.pay_amount - refundAmount
@@ -61,26 +107,40 @@ export class OrderFeed implements iFeed {
 
 			// const profit = salesAmount - totalTotalPrice
 
+			const cardRefundValue = cardRefund[row.card_approval_number] || 0
+
+			const itemPriceData: any = {}
+			row.itemPayAmountDetail.map(detail => Object.values<any>(JSON.parse(detail)).forEach(data => {
+				data.forEach(row => {
+					if (itemPriceData[row.type]) itemPriceData[row.type] += row.rawValue
+					else itemPriceData[row.type] = row.rawValue
+				})
+			}))
+
 			return {
 				'주문일': row.created_at,
 				'구매확정일': row.completed_at,
 				'주문자': row.name,
+				'전화번호': decryptInfo(row.phone),
+				'편집샵명': row.shop_name,
 				'상품명': row.itemName,
 				'주문번호': row.fetching_order_number,
 				'편집샵 주문번호': row.vendor_order_number,
 				'카드 승인번호': row.card_approval_number,
 				'결제 방식': row.pay_method,
 				'페칭 판매가': priceData['ORIGIN_PRICE'],
+				'페칭 수수료': itemPriceData['FETCHING_FEE'],
 				'쿠폰': priceData['COUPON_DISCOUNT'] ?? 0,
 				'적립금': priceData['POINT_DISCOUNT'] ?? 0,
 				'결제가': row.pay_amount,
 				'환불금액': refundAmount,
 				'PG수수료': pgFee,
-				'엘덱스 비용': priceData.ADDITIONAL_FEE,
+				'엘덱스 비용': eldex[row.vendor_order_number] || 0,
 				'관부가세': priceData.DUTY_AND_TAX,
 				'PG수수료 환불': row.refundAmount ? pgFee : 0,
-				'매입환출': row.refundAmount,
-				'매입환출 완료여부': 'N',
+				'매입 금액': card[row.card_approval_number] || 0,
+				'실 매입환출금액': cardRefundValue,
+				'매입환출 완료여부': cardRefundValue !== 0 ? 'Y' : 'N',
 				'반품수수료': 0
 			}
 		})

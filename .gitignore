@@ -13,6 +13,7 @@ node_modules
 # etc
 .DS_Store
 facebook_spreadsheet_access.json
+fetching-sheet.json
 
 .git-credentials
 
