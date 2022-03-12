@@ -90,14 +90,14 @@ export class GoogleFeed implements iFeed {
 		data.map(row => {
 			const link = new URL(row.link)
 			link.searchParams.set('utm_source', 'google')
-			link.searchParams.set('utm_medium', 'cpc')
-			link.searchParams.set('utm_campaign', 'gfeed')
+			link.searchParams.set('utm_medium', 'display')
+			link.searchParams.set('utm_campaign', 'gdn')
 			row.link = link.toString()
 
 			const mobileLink = new URL(row.mobile_link)
 			mobileLink.searchParams.set('utm_source', 'google')
-			mobileLink.searchParams.set('utm_medium', 'cpc')
-			mobileLink.searchParams.set('utm_campaign', 'gfeed')
+			mobileLink.searchParams.set('utm_medium', 'display')
+			mobileLink.searchParams.set('utm_campaign', 'gdn')
 			// eslint-disable-next-line camelcase
 			row.mobile_link = mobileLink.toString()
 		})
