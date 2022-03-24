@@ -1,4 +1,4 @@
-import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadsheet'
+import { GoogleSpreadsheet } from 'google-spreadsheet'
 import {parse} from 'json2csv'
 
 import sheetData from '../../fetching-sheet.json'
@@ -14,34 +14,49 @@ export class OrderFeed implements iFeed {
 
 	async getTsv(): Promise<string> {
 		const doc = new GoogleSpreadsheet('1eb3BblL771lOxbO-tK44ULTA_Llg8oPDlAoFz2xVet8')
+		const taxDoc = new GoogleSpreadsheet('1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU')
 
 		/* eslint-disable camelcase */
 		await doc.useServiceAccountAuth({
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
 		})
+		await taxDoc.useServiceAccountAuth({
+			client_email: sheetData.client_email,
+			private_key: sheetData.private_key,
+		})
 		/* eslint-enable camelcase */
 
 		await doc.loadInfo()
+		await taxDoc.loadInfo()
 
 		const eldexSheet = doc.sheetsById['1342024732']
 		const cardSheet = doc.sheetsById['895507072']
+		const taxSheet = taxDoc.sheetsById['1605798118']
 
 		const eldexRaw = await eldexSheet.getRows()
 		const cardRaw = await cardSheet.getRows()
+		const taxRaw = await taxSheet.getRows()
 
 		const eldex = {}
 		const card = {}
 		const cardRefund = {}
+		const tax = {}
 
 		eldexRaw.map(row => {
-			const id = row['상품명'].split(' ').pop()
+			const id = row['송장번호']
 			const value = row['2차결제금액(원)'].replace(/,/g, '')
 			eldex[id] = parseInt(value)
 		})
 
+		taxRaw.map(row => {
+			const id = row['주문번호'].trim()
+			const value = row['금액'].replace(/,/g, '')
+			tax[id] = parseInt(value)
+		})
+
 		cardRaw.map(row => {
-			const id = row['승인번호']
+			const id = row['승인번호'].trim()
 			const value = parseInt(row['청구금액'].replace(/,/g, ''))
 			const refundValue = parseInt(row['전월취소및부분취소'].replace(/,/g, ''))
 			cardRefund[id] = refundValue
@@ -66,6 +81,9 @@ export class OrderFeed implements iFeed {
              oc.order_cancel_number IS NOT NULL AS isCanceled,
              oe.order_exchange_number IS NOT NULL AS isExchanged,
              oret.order_return_number IS NOT NULL AS isReturned,
+						 fo.status AS orderStatus,
+		         so.status AS shopStatus,
+		         io.invoice AS invoice,
 						 oref.refund_amount AS refundAmount,
 						 fo.pay_amount_detail AS payAmountDetail,
 						 JSON_ARRAYAGG(io.pay_amount_detail) AS itemPayAmountDetail
@@ -107,7 +125,27 @@ export class OrderFeed implements iFeed {
 
 			// const profit = salesAmount - totalTotalPrice
 
-			const cardRefundValue = cardRefund[row.card_approval_number] || 0
+			let status = ''
+
+			if (row.isExchanged) {
+				status = '교환'
+			}
+			if (row.isReturned) {
+				status = '반품'
+			}
+			if (row.isCanceled) {
+				status = '주문 취소'
+			} else {
+				if (!['BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED', 'ORDER_DELAY'].includes(row.shopStatus)) {
+					status = '주문 완료'
+				}
+				if (row.orderStatus === 'COMPLETE') {
+					status = '구매 확정'
+				}
+			}
+
+			const cardApprovalNumber = row.card_approval_number?.trim()
+			const cardRefundValue = cardRefund[cardApprovalNumber] || 0
 
 			const itemPriceData: any = {}
 			row.itemPayAmountDetail.map(detail => Object.values<any>(JSON.parse(detail)).forEach(data => {
@@ -120,6 +158,7 @@ export class OrderFeed implements iFeed {
 			return {
 				'주문일': row.created_at,
 				'구매확정일': row.completed_at,
+				'상태': status,
 				'주문자': row.name,
 				'전화번호': decryptInfo(row.phone),
 				'편집샵명': row.shop_name,
@@ -135,10 +174,10 @@ export class OrderFeed implements iFeed {
 				'결제가': row.pay_amount,
 				'환불금액': refundAmount,
 				'PG수수료': pgFee,
-				'엘덱스 비용': eldex[row.vendor_order_number] || 0,
-				'관부가세': priceData.DUTY_AND_TAX,
+				'엘덱스 비용': eldex[row.invoice] || 0,
+				'관부가세': tax[row.fetching_order_number] || priceData.DUTY_AND_TAX,
 				'PG수수료 환불': row.refundAmount ? pgFee : 0,
-				'매입 금액': card[row.card_approval_number] || 0,
+				'매입 금액': card[cardApprovalNumber] || 0,
 				'실 매입환출금액': cardRefundValue,
 				'매입환출 완료여부': cardRefundValue !== 0 ? 'Y' : 'N',
 				'반품수수료': 0
