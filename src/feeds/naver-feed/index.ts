@@ -45,6 +45,8 @@ export class NaverFeed implements iFeed {
 						 ii.item_code AS item_code,
 				
 			       bi.main_name,
+						 bi.brand_name,
+						 bi.brand_name_kor,
 			       ii.item_gender,
 			       fc.fetching_category_name,
 			       ii.item_name,
@@ -171,6 +173,8 @@ export class NaverFeed implements iFeed {
 			shopId: row.shop_id,
 			itemCode: row.item_code,
 			mainName: row.main_name,
+			brandName: row.brand_name,
+			brandNameKor: row.brand_name_kor,
 			lastCategory: row.category_name3 === '기타' ? row.category_name2 : row.category_name3,
 			itemName: row.item_name,
 			customColor: row.custom_color,
