@@ -65,40 +65,47 @@ export class OrderFeed implements iFeed {
 		})
 
 		const data = await MySQL.execute(`
-		  SELECT fo.created_at,
-             null as completed_at,
-             od.recipient_name as name,
-						 od.phone_number as phone,
-		         si.shop_name,
-						 GROUP_CONCAT(DISTINCT ii.item_name) AS itemName,
-             fo.fetching_order_number,
+			SELECT fo.created_at,
+						 null                                 as completed_at,
+						 od.recipient_name                    as name,
+						 od.phone_number                      as phone,
+						 si.shop_name,
+						 GROUP_CONCAT(DISTINCT ii.item_name)  AS itemName,
+						 fo.fetching_order_number,
 						 so.vendor_order_number,
 						 so.card_approval_number,
-             fo.pay_amount,
-             fo.status,
-             fo.order_path,
-             fo.pay_method,
-             oc.order_cancel_number IS NOT NULL AS isCanceled,
-             oe.order_exchange_number IS NOT NULL AS isExchanged,
-             oret.order_return_number IS NOT NULL AS isReturned,
-						 fo.status AS orderStatus,
-		         so.status AS shopStatus,
-		         io.invoice AS invoice,
-						 oref.refund_amount AS refundAmount,
-						 fo.pay_amount_detail AS payAmountDetail,
-						 JSON_ARRAYAGG(io.pay_amount_detail) AS itemPayAmountDetail
-      FROM commerce.fetching_order fo
-               LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
-               LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
-               LEFT JOIN commerce.order_return oret on fo.fetching_order_number = oret.fetching_order_number
-							 LEFT JOIN commerce.order_refund oref on fo.fetching_order_number = oref.fetching_order_number
-          		 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
-               JOIN commerce.user u on fo.user_id = u.idx
-               JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
-               JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
-               JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
-		  			   JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
-			WHERE fo.paid_at IS NOT NULL AND fo.deleted_at IS NULL
+						 fo.pay_amount                        AS payAmount,
+						 (
+							 SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
+							 FROM commerce.order_additional_pay oap
+							     JOIN commerce.order_additional_pay_item oapi ON oapi.order_additional_number = oap.order_additional_number AND oapi.status = 'PAID'
+							 WHERE oap.fetching_order_number = fo.fetching_order_number
+						 )                                    as additionalPayInfo,
+						 fo.status,
+						 fo.order_path,
+						 fo.pay_method,
+						 oc.order_cancel_number IS NOT NULL   AS isCanceled,
+						 oe.order_exchange_number IS NOT NULL AS isExchanged,
+						 oret.order_return_number IS NOT NULL AS isReturned,
+						 fo.status                            AS orderStatus,
+						 so.status                            AS shopStatus,
+						 io.invoice                           AS invoice,
+						 oref.refund_amount                   AS refundAmount,
+						 fo.pay_amount_detail                 AS payAmountDetail,
+						 JSON_ARRAYAGG(io.pay_amount_detail)  AS itemPayAmountDetail
+			FROM commerce.fetching_order fo
+						 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
+						 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
+						 LEFT JOIN commerce.order_return oret on fo.fetching_order_number = oret.fetching_order_number
+						 LEFT JOIN commerce.order_refund oref on fo.fetching_order_number = oref.fetching_order_number
+						 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
+						 JOIN commerce.user u on fo.user_id = u.idx
+						 JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
+						 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
+						 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
+						 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
+			WHERE fo.paid_at IS NOT NULL
+				AND fo.deleted_at IS NULL
 			GROUP BY fo.fetching_order_number
 			ORDER BY fo.created_at ASC
 		`)
@@ -112,14 +119,25 @@ export class OrderFeed implements iFeed {
 
 			let pgFee = 0
 
-			if (row.pay_method === 'CARD') pgFee = Math.round(row.pay_amount * 0.014)
-			else if (row.pay_method === 'KAKAO') pgFee = Math.round(row.pay_amount * 0.015)
-			else if (row.pay_method === 'NAVER') pgFee = Math.round(row.pay_amount * 0.015)
-			else if (row.pay_method === 'ESCROW') pgFee = Math.round(row.pay_amount * 0.017)
-			else if (row.pay_method === 'ESCROW_CARD') pgFee = Math.round(row.pay_amount * 0.016)
+			if (row.pay_method === 'CARD') pgFee = Math.round(row.payAmount * 0.014)
+			else if (row.pay_method === 'KAKAO') pgFee = Math.round(row.payAmount * 0.015)
+			else if (row.pay_method === 'NAVER') pgFee = Math.round(row.payAmount * 0.015)
+			else if (row.pay_method === 'ESCROW') pgFee = Math.round(row.payAmount * 0.017)
+			else if (row.pay_method === 'ESCROW_CARD') pgFee = Math.round(row.payAmount * 0.016)
+
+			if (row.additionalPayInfo) {
+				for (const {amount, method} of row.additionalPayInfo) {
+					row.payAmount += amount
+					if (method === 'CARD') pgFee += Math.round(amount * 0.014)
+					else if (method === 'KAKAO') pgFee += Math.round(amount * 0.015)
+					else if (method === 'NAVER') pgFee += Math.round(amount * 0.015)
+					else if (method === 'ESCROW') pgFee += Math.round(amount * 0.017)
+					else if (method === 'ESCROW_CARD') pgFee += Math.round(amount * 0.016)
+				}
+			}
 
 			const refundAmount = row.refundAmount ?? 0
-			// const salesAmount = row.pay_amount - refundAmount
+			// const salesAmount = row.payAmount - refundAmount
 			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
 			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
 
@@ -129,11 +147,9 @@ export class OrderFeed implements iFeed {
 
 			if (row.isExchanged) {
 				status = '교환'
-			}
-			if (row.isReturned) {
+			} else if (row.isReturned) {
 				status = '반품'
-			}
-			if (row.isCanceled) {
+			} else if (row.isCanceled) {
 				status = '주문 취소'
 			} else {
 				if (!['BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED', 'ORDER_DELAY'].includes(row.shopStatus)) {
@@ -171,7 +187,7 @@ export class OrderFeed implements iFeed {
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
 				'쿠폰': priceData['COUPON_DISCOUNT'] ?? 0,
 				'적립금': priceData['POINT_DISCOUNT'] ?? 0,
-				'결제가': row.pay_amount,
+				'결제가': row.payAmount,
 				'환불금액': refundAmount,
 				'PG수수료': pgFee,
 				'엘덱스 비용': eldex[row.invoice] || 0,
