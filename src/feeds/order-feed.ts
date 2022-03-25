@@ -87,6 +87,8 @@ export class OrderFeed implements iFeed {
 						 oc.order_cancel_number IS NOT NULL   AS isCanceled,
 						 oe.order_exchange_number IS NOT NULL AS isExchanged,
 						 oret.order_return_number IS NOT NULL AS isReturned,
+			       ssi.customer_negligence_return_fee   AS returnFee,
+			       oret.reason_type                     AS returnReason,
 						 fo.status                            AS orderStatus,
 						 so.status                            AS shopStatus,
 						 io.invoice                           AS invoice,
@@ -104,6 +106,7 @@ export class OrderFeed implements iFeed {
 						 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
 						 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
 						 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
+						 JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
 			WHERE fo.paid_at IS NOT NULL
 				AND fo.deleted_at IS NULL
 			GROUP BY fo.fetching_order_number
@@ -171,6 +174,16 @@ export class OrderFeed implements iFeed {
 				})
 			}))
 
+			if (
+				[
+					'DEFECTIVE_PRODUCT',
+					'WRONG_DELIVERY',
+				].includes(row.returnReason) ||
+				!row.isReturned
+			) {
+				row.returnFee = 0
+			}
+
 			return {
 				'주문일': row.created_at,
 				'구매확정일': row.completed_at,
@@ -196,7 +209,7 @@ export class OrderFeed implements iFeed {
 				'매입 금액': card[cardApprovalNumber] || 0,
 				'실 매입환출금액': cardRefundValue,
 				'매입환출 완료여부': cardRefundValue !== 0 ? 'Y' : 'N',
-				'반품수수료': 0
+				'반품수수료': row.returnFee || 0
 			}
 		})
 
