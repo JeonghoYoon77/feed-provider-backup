@@ -19,6 +19,8 @@ describe('TSVFormat', () => {
 				const title = await tsvFormat.title({
 					shopId: 1,
 					mainName: givenMainName,
+					brandName: givenMainName,
+					brandNameKor: givenMainName,
 					lastCategory: '가방',
 					itemName: givenItemName,
 					customColor: givenCustomColor,
@@ -37,6 +39,8 @@ describe('TSVFormat', () => {
 				const title = await tsvFormat.title({
 					shopId: 1,
 					mainName: givenMainName,
+					brandName: givenMainName,
+					brandNameKor: givenMainName,
 					lastCategory: '가방',
 					itemName: givenItemName,
 					customColor: givenCustomColor,
