@@ -32,8 +32,10 @@ export class KakaoFeed implements iFeed {
 			SELECT ii.idx                                                                               AS 'id',
 						 ii.shop_id                                                                           AS 'shop_id',
 						 ii.item_code                                                                         AS 'code',
-						 bi.main_name                                                                         AS brand_name,
-						 IF(ii.item_gender = 'W', '여성', '남성')                                                 AS gender,
+						 bi.main_name                                                                         AS main_name,
+						 bi.brand_name                                                                        AS brand_name,
+						 bi.brand_name_kor                                                                    AS brand_name_kor,
+						 IF(ii.item_gender = 'W', '여성', '남성')                                               AS gender,
 						 idsi.designer_style_id                                                               AS mpn,
 						 ii.item_name                                                                         AS 'title',
 						 ii.custom_color                                                                      AS color,
@@ -117,11 +119,11 @@ export class KakaoFeed implements iFeed {
 
 		const insertData = data.map(row => [row.id, row.original_price])
 
-		await MySQLWrite.execute('DELETE FROM kakao_upload_item')
+		/*await MySQLWrite.execute('DELETE FROM kakao_upload_item')
 		await MySQLWrite.execute(`
 			INSERT INTO kakao_upload_item (item_id, final_price)
-			VALUES ?;	
-		`, [insertData])
+			VALUES ?;
+		`, [insertData])*/
 
 		let txt = [`<<<tocnt>>>${data.length}`]
 
@@ -129,7 +131,10 @@ export class KakaoFeed implements iFeed {
 			if (row.title.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) row.title = (!row.category_name3 || row.category_name3 === '기타') ? row.category_name2 : row.category_name3
 			row.title = row.title.trim()
 
-			let title = `${row.brand_name} ${row.gender} ${row.title} ${row.mpn ? row.mpn : [72, 78, 80].includes(row.shop_id) ? '' : row.code} ${(row.color || '').replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ').toUpperCase().trim()}`
+			if (row.title.includes(row.brand_name)) row.title = row.title.replace(row.brand_name, '').trim()
+			if (row.title.includes(row.brand_name_kor)) row.title = row.title.replace(row.brand_name_kor, '').trim()
+
+			let title = `${row.main_name} ${row.title} ${row.mpn ? row.mpn : [72, 78, 80].includes(row.shop_id) ? '' : row.code} ${(row.color || '').replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ').toUpperCase().trim()}`
 				.split(' ').filter(str => str).join(' ')
 
 			title = title.replace('è', 'e')
