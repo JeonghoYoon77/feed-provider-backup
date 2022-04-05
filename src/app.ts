@@ -6,12 +6,13 @@ import {
 	GoogleFeed,
 	KakaoFeed,
 	KakaoUpdateFeed,
-	FacebookFeed, PiclickFeed, OrderFeed,
+	FacebookFeed,
+	PiclickFeed,
+	OrderFeed,
 } from './feeds'
 
 program.version(version)
-program
-	.option('-f, --feed-name <feedName>', '크롤러 이름')
+program.option('-f, --feed-name <feedName>', '피드 이름')
 program.parse(process.argv)
 
 async function main() {
