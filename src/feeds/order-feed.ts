@@ -6,6 +6,7 @@ import sheetData from '../../fetching-sheet.json'
 import { iFeed } from './feed'
 import { MySQL, S3Client } from '../utils'
 import { decryptInfo } from '../utils/privacy-encryption'
+import { writeFileSync } from 'fs'
 
 export class OrderFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
@@ -13,8 +14,9 @@ export class OrderFeed implements iFeed {
 	}
 
 	async getTsv(): Promise<string> {
+		// 재무 시트
 		const doc = new GoogleSpreadsheet(
-			'1eb3BblL771lOxbO-tK44ULTA_Llg8oPDlAoFz2xVet8',
+			'1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0',
 		)
 		const taxDoc = new GoogleSpreadsheet(
 			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU',
@@ -34,8 +36,8 @@ export class OrderFeed implements iFeed {
 		await doc.loadInfo()
 		await taxDoc.loadInfo()
 
-		const eldexSheet = doc.sheetsById['1342024732']
-		const cardSheet = doc.sheetsById['895507072']
+		const eldexSheet = doc.sheetsByTitle['엘덱스비용'] // 엘덱스비용
+		const cardSheet = doc.sheetsByTitle['롯데카드이용내역'] // 롯데카드이용내역 (정확하지만 한달에 한번씩만 갱신)
 		const taxSheet = taxDoc.sheetsById['1605798118']
 
 		const eldexRaw = await eldexSheet.getRows()
@@ -65,9 +67,22 @@ export class OrderFeed implements iFeed {
 			const refundValue = parseInt(
 				row['전월취소및부분취소'].replace(/,/g, ''),
 			)
-			cardRefund[id] = refundValue
-			if (value > 0) card[id] = value
-			else cardRefund[id] += value
+
+			cardRefund[id] = 0
+
+			if (value < 0) {
+				cardRefund[id] = value
+			}
+
+			if (refundValue < 0) {
+				cardRefund[id] = refundValue
+			}
+
+			if (value > 0) {
+				card[id] = value
+			} else {
+				cardRefund[id] += value
+			}
 		})
 
 		const data = await MySQL.execute(`
@@ -93,14 +108,47 @@ export class OrderFeed implements iFeed {
 						 oc.order_cancel_number IS NOT NULL   AS isCanceled,
 						 oe.order_exchange_number IS NOT NULL AS isExchanged,
 						 oret.order_return_number IS NOT NULL AS isReturned,
-			       ssi.customer_negligence_return_fee   AS returnFee,
-			       oret.reason_type                     AS returnReason,
+						 (
+							SELECT GROUP_CONCAT( DISTINCT 
+								case
+									when ori2.return_item_number is not null
+									then '반품'
+									when oci2.cancel_item_number is not null 
+									then '주문 취소'
+									when fo.status = 'COMPLETE'
+									then '구매 확정'
+									when so.status not in ('BEFORE_DEPOSIT','ORDER_AVAILABLE','ORDER_WAITING','PRE_ORDER_REQUIRED','ORDER_DELAY')
+									then '주문 완료'
+									else ''
+								end 
+							)
+							FROM commerce.item_order io2
+							inner join commerce.shop_order so2 
+							on 1=1
+								and so2.shop_order_number = io2.shop_order_number
+							left join commerce.order_cancel_item oci2 
+							on 1=1
+								and io2.item_order_number = oci2.item_order_number 
+							left join commerce.order_return_item ori2
+							on 1=1
+								and io2.item_order_number = ori2.item_order_number 
+							WHERE 1=1
+								AND so2.fetching_order_number = fo.fetching_order_number 
+						) as itemStatusList,
+						 ssi.customer_negligence_return_fee   AS returnFee,
+						 oret.reason_type                     AS returnReason,
 						 fo.status                            AS orderStatus,
 						 so.status                            AS shopStatus,
 						 io.invoice                           AS invoice,
-						 oref.refund_amount                   AS refundAmount,
+						 case 
+							when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
+							then fo.pay_amount
+							else oref.refund_amount
+						 end                   				  AS refundAmount,
 						 fo.pay_amount_detail                 AS payAmountDetail,
-						 JSON_ARRAYAGG(io.pay_amount_detail)  AS itemPayAmountDetail
+						 JSON_ARRAYAGG(io.pay_amount_detail)  AS itemPayAmountDetail,
+						 COALESCE(fo.coupon_discount_amount, 0) AS couponDiscountAmount,
+						 COALESCE(fo.use_point, 0) as pointDiscountAmount
 			FROM commerce.fetching_order fo
 						 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
 						 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
@@ -122,9 +170,14 @@ export class OrderFeed implements iFeed {
 		const feed = data.map((row) => {
 			const priceData: any = {}
 			JSON.parse(row.payAmountDetail).forEach((row) => {
-				if (priceData[row.type]) priceData[row.type] += row.value
-				else priceData[row.type] = row.value
+				if (priceData[row.type]) {
+					priceData[row.type] += row.value
+				} else {
+					priceData[row.type] = row.value
+				}
 			})
+
+			const remarks = []
 
 			let pgFee = 0
 
@@ -161,31 +214,6 @@ export class OrderFeed implements iFeed {
 
 			// const profit = salesAmount - totalTotalPrice
 
-			let status = ''
-
-			if (row.isExchanged) {
-				status = '교환'
-			} else if (row.isReturned) {
-				status = '반품'
-			} else if (row.isCanceled) {
-				status = '주문 취소'
-			} else {
-				if (
-					![
-						'BEFORE_DEPOSIT',
-						'ORDER_AVAILABLE',
-						'ORDER_WAITING',
-						'PRE_ORDER_REQUIRED',
-						'ORDER_DELAY',
-					].includes(row.shopStatus)
-				) {
-					status = '주문 완료'
-				}
-				if (row.orderStatus === 'COMPLETE') {
-					status = '구매 확정'
-				}
-			}
-
 			const cardApprovalNumber = row.card_approval_number?.trim()
 			const cardRefundValue = cardRefund[cardApprovalNumber] || 0
 
@@ -209,26 +237,40 @@ export class OrderFeed implements iFeed {
 				row.returnFee = 0
 			}
 
-			if (row.fetching_order_number == '20220122-0000011') {
-				console.log(card[cardApprovalNumber])
+			if (row.cardApprovalNumber?.includes('매입')) {
+				remarks.push('매입')
+			}
+
+			// 매입환출 완료여부
+			let purchaseReturn = '환출미완료'
+
+			if (
+				row.itemStatusList?.includes('취소') ||
+				row.itemStatusList?.includes('반품')
+			) {
+				if (refundAmount > 0) {
+					purchaseReturn = '환출완료'
+				}
+			} else {
+				purchaseReturn = '해당없음'
 			}
 
 			return {
 				주문일: row.created_at,
 				구매확정일: row.completed_at,
-				상태: status,
+				상태: row.itemStatusList,
 				주문자: row.name,
 				전화번호: decryptInfo(row.phone),
 				편집샵명: row.shop_name,
 				상품명: row.itemName,
 				주문번호: row.fetching_order_number,
 				'편집샵 주문번호': row.vendorOrderNumber,
-				'카드 승인번호': row.cardApprovalNumber,
+				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
 				'결제 방식': row.pay_method,
 				'페칭 판매가': priceData['ORIGIN_PRICE'],
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
-				쿠폰: priceData['COUPON_DISCOUNT'] ?? 0,
-				적립금: priceData['POINT_DISCOUNT'] ?? 0,
+				쿠폰: row.couponDiscountAmount,
+				적립금: row.pointDiscountAmount,
 				결제가: row.payAmount,
 				환불금액: refundAmount,
 				PG수수료: pgFee,
@@ -237,8 +279,9 @@ export class OrderFeed implements iFeed {
 				'PG수수료 환불': row.refundAmount ? pgFee : 0,
 				'매입 금액': card[cardApprovalNumber] || 0,
 				'실 매입환출금액': cardRefundValue,
-				'매입환출 완료여부': cardRefundValue !== 0 ? 'Y' : 'N',
+				'매입환출 완료여부': purchaseReturn,
 				반품수수료: row.returnFee || 0,
+				비고: remarks.join(', '),
 			}
 		})
 
@@ -258,6 +301,8 @@ export class OrderFeed implements iFeed {
 			buffer,
 			contentType: 'text/csv',
 		})
+
+		writeFileSync('asdf', buffer)
 
 		console.log(`FEED_URL: ${feedUrl}`)
 	}

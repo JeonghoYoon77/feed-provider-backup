@@ -18,3 +18,5 @@ fetching-sheet.json
 .git-credentials
 
 **/.aws/credentials
+
+*.csv
