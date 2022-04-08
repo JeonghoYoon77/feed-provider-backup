@@ -38,14 +38,17 @@ export class OrderFeed implements iFeed {
 
 		const eldexSheet = doc.sheetsByTitle['엘덱스비용'] // 엘덱스비용
 		const cardSheet = doc.sheetsByTitle['롯데카드이용내역'] // 롯데카드이용내역 (정확하지만 한달에 한번씩만 갱신)
+		const cardExtraSheet = doc.sheetsByTitle['롯데카드승인내역'] // 롯데카드승인내역 (부정확하지만 자주 갱신)
 		const taxSheet = taxDoc.sheetsById['1605798118']
 
 		const eldexRaw = await eldexSheet.getRows()
 		const cardRaw = await cardSheet.getRows()
+		const cardExtraRaw = await cardExtraSheet.getRows()
 		const taxRaw = await taxSheet.getRows()
 
 		const eldex = {}
 		const card = {}
+		const cardExtra = {}
 		const cardRefund = {}
 		const tax = {}
 
@@ -85,6 +88,23 @@ export class OrderFeed implements iFeed {
 			}
 		})
 
+		cardExtraRaw.map((row) => {
+			const id = row['승인번호'].trim()
+			const value = parseInt(row['승인금액(원화)'].replace(/,/g, ''))
+
+			if (value > 0) {
+				cardExtra[id] = value
+			}
+
+			if (cardRefund[id] === 0 && cardRefund[id] === undefined) {
+				cardRefund[id] = 0
+
+				if (value < 0) {
+					cardRefund[id] = value
+				}
+			}
+		})
+
 		const data = await MySQL.execute(`
 			SELECT fo.created_at,
 						 null                                 as completed_at,
@@ -93,8 +113,8 @@ export class OrderFeed implements iFeed {
 						 si.shop_name,
 						 GROUP_CONCAT(DISTINCT ii.item_name)  AS itemName,
 						 fo.fetching_order_number,
-						 GROUP_CONCAT(DISTINCT so.vendor_order_number) AS vendorOrderNumber,
-						 GROUP_CONCAT(DISTINCT so.card_approval_number) AS cardApprovalNumber,
+						 GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ') AS vendorOrderNumber,
+						 GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ') AS cardApprovalNumber,
 						 fo.pay_amount                        AS payAmount,
 						 (
 							 SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
@@ -214,8 +234,30 @@ export class OrderFeed implements iFeed {
 
 			// const profit = salesAmount - totalTotalPrice
 
-			const cardApprovalNumber = row.card_approval_number?.trim()
-			const cardRefundValue = cardRefund[cardApprovalNumber] || 0
+			const cardApprovalNumberList =
+				row.cardApprovalNumber?.split(',') ?? []
+
+			const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
+				const cardApprovalNumber = e.trim()
+
+				const refund = cardRefund[cardApprovalNumber] || 0
+
+				return refund + acc
+			}, 0)
+
+			const cardPurchaseValue = cardApprovalNumberList.reduce(
+				(acc, e) => {
+					const cardApprovalNumber = e.trim()
+
+					const value =
+						card[cardApprovalNumber] ||
+						cardExtra[cardApprovalNumber] ||
+						0
+
+					return value + acc
+				},
+				0,
+			)
 
 			const itemPriceData: any = {}
 			row.itemPayAmountDetail.map((detail) =>
@@ -277,8 +319,8 @@ export class OrderFeed implements iFeed {
 				'엘덱스 비용': eldex[row.invoice] || 0,
 				관부가세: tax[row.fetching_order_number] || 0,
 				'PG수수료 환불': row.refundAmount ? pgFee : 0,
-				'매입 금액': card[cardApprovalNumber] || 0,
-				'실 매입환출금액': cardRefundValue,
+				'매입 금액': cardPurchaseValue,
+				'실 매입환출금액': -cardRefundValue,
 				'매입환출 완료여부': purchaseReturn,
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
@@ -302,7 +344,7 @@ export class OrderFeed implements iFeed {
 			contentType: 'text/csv',
 		})
 
-		writeFileSync('asdf', buffer)
+		writeFileSync('asdf.csv', buffer)
 
 		console.log(`FEED_URL: ${feedUrl}`)
 	}
