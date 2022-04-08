@@ -183,9 +183,7 @@ export class NaverFeed implements iFeed {
 		const pcLink: string = tsvFormat.link({
 			address: constants.address(),
 		})
-		const mobileLink: string = tsvFormat.link({
-			address: constants.address(),
-		})
+		const mobileLink: string = pcLink
 		const searchTag: string = tsvFormat.searchTag({
 			itemName: row.item_name,
 			brandMainName: row.main_name,
@@ -230,4 +228,3 @@ export class NaverFeed implements iFeed {
 		}
 	}
 }
-
