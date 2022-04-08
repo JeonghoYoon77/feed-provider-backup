@@ -165,7 +165,14 @@ export class OrderFeed implements iFeed {
 						 fo.pay_amount_detail                 AS payAmountDetail,
 						 JSON_ARRAYAGG(io.pay_amount_detail)  AS itemPayAmountDetail,
 						 COALESCE(fo.coupon_discount_amount, 0) AS couponDiscountAmount,
-						 COALESCE(fo.use_point, 0) as pointDiscountAmount
+						 COALESCE(fo.use_point, 0) as pointDiscountAmount,
+						 exists(
+							select 1 
+							from commerce.order_refund refund
+							where 1=1
+								and refund.tax_refund_status = 'ACCEPT'
+								and refund.fetching_order_number = fo.fetching_order_number
+						 ) AS taxRefunded
 			FROM commerce.fetching_order fo
 						 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
 						 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
@@ -294,6 +301,13 @@ export class OrderFeed implements iFeed {
 				purchaseReturn = '해당없음'
 			}
 
+			const taxTotal = tax[row.fetching_order_number] || 0
+			let taxRefund = 0
+
+			if (row.taxRefunded == 1) {
+				taxRefund = taxTotal
+			}
+
 			const data = {
 				주문일: row.created_at,
 				구매확정일: row.completed_at,
@@ -314,7 +328,8 @@ export class OrderFeed implements iFeed {
 				환불금액: refundAmount,
 				PG수수료: pgFee,
 				'엘덱스 비용': eldex[row.invoice] || 0,
-				관부가세: tax[row.fetching_order_number] || 0,
+				관부가세: taxTotal,
+				'관부가세 환급': taxRefund,
 				'PG수수료 환불': row.refundAmount ? pgFee : 0,
 				'매입 금액': cardPurchaseValue,
 				'실 매입환출금액': -cardRefundValue,
