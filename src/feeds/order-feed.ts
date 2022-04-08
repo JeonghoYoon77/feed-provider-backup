@@ -184,7 +184,7 @@ export class OrderFeed implements iFeed {
 						 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
 						 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
 						 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
-						 JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
+						 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
 			WHERE fo.paid_at IS NOT NULL
 				AND fo.deleted_at IS NULL
 			GROUP BY fo.fetching_order_number
@@ -291,10 +291,11 @@ export class OrderFeed implements iFeed {
 			let purchaseReturn = '환출미완료'
 
 			if (
-				row.itemStatusList?.includes('취소') ||
-				row.itemStatusList?.includes('반품')
+				(row.itemStatusList?.includes('취소') ||
+					row.itemStatusList?.includes('반품')) &&
+				cardPurchaseValue !== 0
 			) {
-				if (refundAmount > 0) {
+				if (cardRefundValue < 0) {
 					purchaseReturn = '환출완료'
 				}
 			} else {
