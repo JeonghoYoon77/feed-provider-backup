@@ -20,8 +20,7 @@ async function main() {
 	const feedExecute = {
 		'NAVER-FEED': async () => {
 			const naverFeed = new NaverFeed()
-			await naverFeed.getTsvBuffer()
-			//await naverFeed.upload()
+			await naverFeed.upload()
 		},
 		'NAVER-SALES-FEED': async () => {
 			const naverSalesFeed = new NaverSalesFeed()
