@@ -1,6 +1,5 @@
 import { iFeed } from './feed'
-import {MySQL, MySQLWrite, S3Client} from '../utils'
-
+import { MySQL, MySQLWrite, S3Client } from '../utils'
 
 export class KakaoFeed implements iFeed {
 	async upload() {
@@ -10,14 +9,14 @@ export class KakaoFeed implements iFeed {
 			folderName: 'feeds',
 			fileName: 'kakao-feed.txt',
 			buffer,
-			contentType: 'text/plain'
+			contentType: 'text/plain',
 		})
 
 		await S3Client.upload({
 			folderName: 'feeds',
 			fileName: 'kakao-update-feed.txt',
 			buffer: Buffer.from(''),
-			contentType: 'text/plain'
+			contentType: 'text/plain',
 		})
 		console.log(`FEED_URL: ${feedUrl}`)
 	}
@@ -117,7 +116,7 @@ export class KakaoFeed implements iFeed {
 		`
 		const data = await MySQL.execute(query)
 
-		const insertData = data.map(row => [row.id, row.original_price])
+		const insertData = data.map((row) => [row.id, row.original_price])
 
 		/*await MySQLWrite.execute('DELETE FROM kakao_upload_item')
 		await MySQLWrite.execute(`
@@ -128,20 +127,47 @@ export class KakaoFeed implements iFeed {
 		let txt = [`<<<tocnt>>>${data.length}`]
 
 		data.forEach((row) => {
-			if (row.title.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) row.title = (!row.category_name3 || row.category_name3 === '기타') ? row.category_name2 : row.category_name3
+			// 이미지 리사이징 버전으로 교체
+			row.image_link = row.image_link.replace(
+				'fetching-app.s3.ap-northeast-2.amazonaws.com',
+				'static.fetchingapp.co.kr/resize/naver',
+			)
+
+			if (row.title.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1)
+				row.title =
+					!row.category_name3 || row.category_name3 === '기타'
+						? row.category_name2
+						: row.category_name3
 			row.title = row.title.trim()
 
-			if (row.title.includes(row.brand_name)) row.title = row.title.replace(row.brand_name, '').trim()
-			if (row.title.includes(row.brand_name_kor)) row.title = row.title.replace(row.brand_name_kor, '').trim()
+			if (row.title.includes(row.brand_name))
+				row.title = row.title.replace(row.brand_name, '').trim()
+			if (row.title.includes(row.brand_name_kor))
+				row.title = row.title.replace(row.brand_name_kor, '').trim()
 
-			let title = `${row.main_name} ${row.title} ${row.mpn ? row.mpn : [72, 78, 80].includes(row.shop_id) ? '' : row.code} ${(row.color || '').replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ').toUpperCase().trim()}`
-				.split(' ').filter(str => str).join(' ')
+			let title = `${row.main_name} ${row.title} ${
+				row.mpn
+					? row.mpn
+					: [72, 78, 80].includes(row.shop_id)
+					? ''
+					: row.code
+			} ${(row.color || '')
+				.replace(/[^a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣]/gi, ' ')
+				.toUpperCase()
+				.trim()}`
+				.split(' ')
+				.filter((str) => str)
+				.join(' ')
 
 			title = title.replace('è', 'e')
 			title = title.replace('É', 'E')
 			title = title.split('\n').join('')
 
-			row.title = title.replace(/([&"'_])/g, '').split(' ').filter(data => data).join(' ')
+			row.title = title
+				.replace(/([&"'_])/g, '')
+				.split(' ')
+				.filter((data) => data)
+				.join(' ')
 
 			row.link = new URL(row.link)
 			row.link.searchParams.set('utm_source', 'daum')
@@ -165,10 +191,8 @@ export class KakaoFeed implements iFeed {
 <<<deliv>>>0
 <<<event>>>${row.event_words}
 <<<ftend>>>`)
-		}
-		)
+		})
 
 		return txt.join('\n')
 	}
 }
-
