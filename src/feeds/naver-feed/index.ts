@@ -29,7 +29,9 @@ export class NaverFeed implements iFeed {
 
 	async getTsv(delimiter = '\t'): Promise<string> {
 		const data = await MySQL.execute(NaverFeed.query())
-		const tsvData: TSVData[] = await Promise.all(data.map(NaverFeed.makeRow))
+		const tsvData: TSVData[] = await Promise.all(
+			data.map(NaverFeed.makeRow),
+		)
 
 		return parse(tsvData, {
 			fields: Object.keys(tsvData[0]),
@@ -39,7 +41,8 @@ export class NaverFeed implements iFeed {
 	}
 
 	private static query(): string {
-		return format(`
+		return format(
+			`
 			SELECT ii.idx AS 'id',
 			       ii.shop_id AS shop_id,
 						 ii.item_code AS item_code,
@@ -159,7 +162,9 @@ export class NaverFeed implements iFeed {
 				AND NOT (bi.brand_id = 17 AND (fc.idx IN (17, 21) OR fc.fetching_category_parent_id IN (17, 21)))
 			ORDER BY nul.sequence
 			LIMIT ?
-		`, [constants.limit()])
+		`,
+			[constants.limit()],
+		)
 	}
 
 	private static async makeRow(row): Promise<TSVData> {
@@ -167,7 +172,7 @@ export class NaverFeed implements iFeed {
 			itemGender: row.item_gender,
 			id: row.id,
 			productNo: row.product_no,
-			shopId: row.shop_id
+			shopId: row.shop_id,
 		})
 		const title: string = await tsvFormat.title({
 			shopId: row.shop_id,
@@ -175,7 +180,10 @@ export class NaverFeed implements iFeed {
 			mainName: row.main_name,
 			brandName: row.brand_name,
 			brandNameKor: row.brand_name_kor,
-			lastCategory: row.category_name3 === '기타' ? row.category_name2 : row.category_name3,
+			lastCategory:
+				row.category_name3 === '기타'
+					? row.category_name2
+					: row.category_name3,
 			itemName: row.item_name,
 			customColor: row.custom_color,
 			mpn: row.designer_style_id,
@@ -194,37 +202,49 @@ export class NaverFeed implements iFeed {
 		let price = tsvFormat.price(row.ip_final_price)
 		let point = Math.floor(price * 0.02)
 
+		// 이미지 리사이징 버전으로 교체
+		row.image_link = row.image_link.replace(
+			'fetching-app.s3.ap-northeast-2.amazonaws.com',
+			'static.fetchingapp.co.kr/resize/naver',
+		)
+
 		return {
 			id: `F${row.id}`,
 			title,
-			'price_pc': price,
-			'price_mobile': price,
-			'normal_price': row.iop_final_price,
+			price_pc: price,
+			price_mobile: price,
+			normal_price: row.iop_final_price,
 			link: pcLink,
-			'mobile_link': mobileLink,
-			'image_link': row.image_link,
-			'add_image_link': row.add_image_link,
-			'category_name1': row.category_name1,
-			'category_name2': row.category_name2,
-			'category_name3': row.category_name3,
-			'naver_category': row.naver_category,
+			mobile_link: mobileLink,
+			image_link: row.image_link,
+			add_image_link: row.add_image_link,
+			category_name1: row.category_name1,
+			category_name2: row.category_name2,
+			category_name3: row.category_name3,
+			naver_category: row.naver_category,
 			condition: constants.condition(),
-			'brand': row.main_name,
-			'event_words': constants.eventWords(),
+			brand: row.main_name,
+			event_words: constants.eventWords(),
 			coupon: tsvFormat.coupon(row.ip_final_price),
-			'partner_coupon_download': row.product_no ? tsvFormat.partnerCouponDownload(row.ip_final_price) : '',
-			'interest_free_event': '삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~6',
+			partner_coupon_download: row.product_no
+				? tsvFormat.partnerCouponDownload(row.ip_final_price)
+				: '',
+			interest_free_event:
+				'삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~6',
 			point,
-			'manufacture_define_number': row.designer_style_id || '',
-			'naver_product_id': row.naver_product_id || '',
+			manufacture_define_number: row.designer_style_id || '',
+			naver_product_id: row.naver_product_id || '',
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
-			'review_count': row.review_count,
+			review_count: row.review_count,
 			shipping: constants.shipping(),
-			'import_flag': row.shop_type === '해외편집샵' ? row.import_flag : 'N',
-			'option_detail': row.option_detail.split('\n').filter(str => str).join(' '),
+			import_flag: row.shop_type === '해외편집샵' ? row.import_flag : 'N',
+			option_detail: row.option_detail
+				.split('\n')
+				.filter((str) => str)
+				.join(' '),
 			gender: tsvFormat.gender(),
-			'includes_vat': constants.includesVat(),
-			'search_tag': searchTag
+			includes_vat: constants.includesVat(),
+			search_tag: searchTag,
 		}
 	}
 }
