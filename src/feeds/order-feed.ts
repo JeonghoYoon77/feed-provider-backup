@@ -7,6 +7,7 @@ import { iFeed } from './feed'
 import { MySQL, S3Client } from '../utils'
 import { decryptInfo } from '../utils/privacy-encryption'
 import { writeFileSync } from 'fs'
+import { map } from 'lodash'
 
 export class OrderFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
@@ -75,16 +76,12 @@ export class OrderFeed implements iFeed {
 
 			if (value < 0) {
 				cardRefund[id] = value
+			} else if (value > 0) {
+				card[id] = value
 			}
 
 			if (refundValue < 0) {
 				cardRefund[id] = refundValue
-			}
-
-			if (value > 0) {
-				card[id] = value
-			} else {
-				cardRefund[id] += value
 			}
 		})
 
@@ -297,12 +294,12 @@ export class OrderFeed implements iFeed {
 				purchaseReturn = '해당없음'
 			}
 
-			return {
+			const data = {
 				주문일: row.created_at,
 				구매확정일: row.completed_at,
 				상태: row.itemStatusList,
 				주문자: row.name,
-				전화번호: decryptInfo(row.phone),
+				전화번호: decryptInfo(row.phone) + ' ',
 				편집샵명: row.shop_name,
 				상품명: row.itemName,
 				주문번호: row.fetching_order_number,
@@ -325,6 +322,16 @@ export class OrderFeed implements iFeed {
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
 			}
+
+			// if (row.fetching_order_number == '20220210-0000004') {
+			// 	console.log(data)
+			// }
+
+			// if (row.fetching_order_number == '20220209-0000032') {
+			// 	console.log(data)
+			// }
+
+			return data
 		})
 
 		return parse(feed, {
