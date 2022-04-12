@@ -209,7 +209,7 @@ export class PiclickFeed implements iFeed {
 				'normal_price': price >= row.iop_final_price ? price : row.iop_final_price,
 				link: pcLink,
 				'mobile_link': mobileLink,
-				'image_link': row.image_link,
+				'image_link': row.image_link.replace('fetching-app.s3.ap-northeast-2.amazonaws.com', 'static.fetchingapp.co.kr'),
 				'add_image_link': row.add_image_link,
 				'category_name1': row.category_name1,
 				'category_name2': row.category_name2,
