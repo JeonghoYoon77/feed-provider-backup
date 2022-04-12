@@ -98,8 +98,9 @@ export class GoogleFeed implements iFeed {
 			mobileLink.searchParams.set('utm_source', 'google')
 			mobileLink.searchParams.set('utm_medium', 'display')
 			mobileLink.searchParams.set('utm_campaign', 'gdn')
-			// eslint-disable-next-line camelcase
-			row.mobile_link = mobileLink.toString()
+			row['mobile_link'] = mobileLink.toString()
+
+			row['image_link'] = row.image_link.replace('fetching-app.s3.ap-northeast-2.amazonaws.com', 'static.fetchingapp.co.kr')
 		})
 
 		const tsv = parse(data, {
