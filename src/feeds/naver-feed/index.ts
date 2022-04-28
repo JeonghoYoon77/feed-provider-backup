@@ -55,7 +55,7 @@ export class NaverFeed implements iFeed {
 			       ii.item_name,
 			       ii.origin_name,
 			       ii.custom_color,
-			       idsi.designer_style_id,
+			       idsi.raw_id AS designer_style_id,
 						 inpi.naver_product_id,
 			       
 			       si.shop_type,
@@ -168,6 +168,9 @@ export class NaverFeed implements iFeed {
 	}
 
 	private static async makeRow(row): Promise<TSVData> {
+		// eslint-disable-next-line camelcase
+		if (row.designer_style_id) row.designer_style_id = row.designer_style_id.replace(/[^\dA-Za-z]/g, ' ').split(' ').filter(str => str).join(' ')
+
 		const tsvFormat = new TSVFormat({
 			itemGender: row.item_gender,
 			id: row.id,
