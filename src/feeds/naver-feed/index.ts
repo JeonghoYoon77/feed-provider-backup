@@ -55,7 +55,7 @@ export class NaverFeed implements iFeed {
 			       ii.item_name,
 			       ii.origin_name,
 			       ii.custom_color,
-			       idsi.designer_style_id,
+			       idsi.raw_id AS designer_style_id,
 						 inpi.naver_product_id,
 			       
 			       si.shop_type,
@@ -168,6 +168,9 @@ export class NaverFeed implements iFeed {
 	}
 
 	private static async makeRow(row): Promise<TSVData> {
+		// eslint-disable-next-line camelcase
+		if (row.designer_style_id) row.designer_style_id = row.designer_style_id.replace(/[^\dA-Za-z]/g, ' ').split(' ').filter(str => str).join(' ')
+
 		const tsvFormat = new TSVFormat({
 			itemGender: row.item_gender,
 			id: row.id,
@@ -237,7 +240,7 @@ export class NaverFeed implements iFeed {
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
 			review_count: row.review_count,
 			shipping: constants.shipping(),
-			import_flag: row.shop_type === '해외편집샵' ? row.import_flag : 'N',
+			import_flag: ['해외편집샵', '해외브랜드'].includes(row.shop_type) ? row.import_flag : 'N',
 			option_detail: row.option_detail
 				.split('\n')
 				.filter((str) => str)
