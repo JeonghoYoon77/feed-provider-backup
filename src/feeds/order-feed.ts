@@ -1,108 +1,111 @@
-import { GoogleSpreadsheet } from 'google-spreadsheet'
-import { parse } from 'json2csv'
+import { GoogleSpreadsheet } from "google-spreadsheet";
+import { parse } from "json2csv";
 
-import sheetData from '../../fetching-sheet.json'
+import sheetData from "../../fetching-sheet.json";
 
-import { iFeed } from './feed'
-import { MySQL, S3Client } from '../utils'
-import { decryptInfo } from '../utils/privacy-encryption'
-import { writeFileSync } from 'fs'
-import { map } from 'lodash'
+import { iFeed } from "./feed";
+import { MySQL, S3Client } from "../utils";
+import { decryptInfo } from "../utils/privacy-encryption";
+import { writeFileSync } from "fs";
+import { map } from "lodash";
 
 export class OrderFeed implements iFeed {
-	async getTsvBuffer(): Promise<Buffer> {
-		return Buffer.from(await this.getTsv(), 'utf-8')
-	}
+  async getTsvBuffer(): Promise<Buffer> {
+    return Buffer.from(await this.getTsv(null, null), "utf-8");
+  }
 
-	async getTsv(): Promise<string> {
-		// 재무 시트
-		const doc = new GoogleSpreadsheet(
-			'1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0',
-		)
-		const taxDoc = new GoogleSpreadsheet(
-			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU',
-		)
+  async getTsvBufferWithRange(start: Date, end: Date): Promise<Buffer> {
+    return Buffer.from(await this.getTsv(start, end), "utf-8");
+  }
 
-		/* eslint-disable camelcase */
-		await doc.useServiceAccountAuth({
-			client_email: sheetData.client_email,
-			private_key: sheetData.private_key,
-		})
-		await taxDoc.useServiceAccountAuth({
-			client_email: sheetData.client_email,
-			private_key: sheetData.private_key,
-		})
-		/* eslint-enable camelcase */
+  async getTsv(start: Date, end: Date): Promise<string> {
+    // 재무 시트
+    const doc = new GoogleSpreadsheet(
+      "1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0"
+    );
+    const taxDoc = new GoogleSpreadsheet(
+      "1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU"
+    );
 
-		await doc.loadInfo()
-		await taxDoc.loadInfo()
+    /* eslint-disable camelcase */
+    await doc.useServiceAccountAuth({
+      client_email: sheetData.client_email,
+      private_key: sheetData.private_key,
+    });
+    await taxDoc.useServiceAccountAuth({
+      client_email: sheetData.client_email,
+      private_key: sheetData.private_key,
+    });
+    /* eslint-enable camelcase */
 
-		const eldexSheet = doc.sheetsByTitle['엘덱스비용'] // 엘덱스비용
-		const cardSheet = doc.sheetsByTitle['롯데카드이용내역'] // 롯데카드이용내역 (정확하지만 한달에 한번씩만 갱신)
-		const cardExtraSheet = doc.sheetsByTitle['롯데카드승인내역'] // 롯데카드승인내역 (부정확하지만 자주 갱신)
-		const taxSheet = taxDoc.sheetsById['1605798118']
+    await doc.loadInfo();
+    await taxDoc.loadInfo();
 
-		const eldexRaw = await eldexSheet.getRows()
-		const cardRaw = await cardSheet.getRows()
-		const cardExtraRaw = await cardExtraSheet.getRows()
-		const taxRaw = await taxSheet.getRows()
+    const eldexSheet = doc.sheetsByTitle["엘덱스비용"]; // 엘덱스비용
+    const cardSheet = doc.sheetsByTitle["롯데카드이용내역"]; // 롯데카드이용내역 (정확하지만 한달에 한번씩만 갱신)
+    const cardExtraSheet = doc.sheetsByTitle["롯데카드승인내역"]; // 롯데카드승인내역 (부정확하지만 자주 갱신)
+    const taxSheet = taxDoc.sheetsById["1605798118"];
 
-		const eldex = {}
-		const card = {}
-		const cardExtra = {}
-		const cardRefund = {}
-		const tax = {}
+    const eldexRaw = await eldexSheet.getRows();
+    const cardRaw = await cardSheet.getRows();
+    const cardExtraRaw = await cardExtraSheet.getRows();
+    const taxRaw = await taxSheet.getRows();
 
-		eldexRaw.map((row) => {
-			const id = row['송장번호']
-			const value = row['2차결제금액(원)'].replace(/,/g, '')
-			eldex[id] = parseInt(value)
-		})
+    const eldex = {};
+    const card = {};
+    const cardExtra = {};
+    const cardRefund = {};
+    const tax = {};
 
-		taxRaw.map((row) => {
-			const id = row['주문번호'].trim()
-			const value = row['금액'].replace(/,/g, '')
-			tax[id] = parseInt(value)
-		})
+    eldexRaw.map((row) => {
+      const id = row["송장번호"];
+      const value = row["2차결제금액(원)"].replace(/,/g, "");
+      eldex[id] = parseInt(value);
+    });
 
-		cardRaw.map((row) => {
-			const id = row['승인번호'].trim()
-			const value = parseInt(row['청구금액'].replace(/,/g, ''))
-			const refundValue = parseInt(
-				row['전월취소및부분취소'].replace(/,/g, ''),
-			)
+    taxRaw.map((row) => {
+      const id = row["주문번호"].trim();
+      const value = row["금액"].replace(/,/g, "");
+      tax[id] = parseInt(value);
+    });
 
-			cardRefund[id] = 0
+    cardRaw.map((row) => {
+      const id = row["승인번호"].trim();
+      const value = parseInt(row["청구금액"].replace(/,/g, ""));
+      const refundValue = parseInt(row["전월취소및부분취소"].replace(/,/g, ""));
 
-			if (value < 0) {
-				cardRefund[id] = value
-			} else if (value > 0) {
-				card[id] = value
-			}
+      cardRefund[id] = 0;
 
-			if (refundValue < 0) {
-				cardRefund[id] = refundValue
-			}
-		})
+      if (value < 0) {
+        cardRefund[id] = value;
+      } else if (value > 0) {
+        card[id] = value;
+      }
 
-		cardExtraRaw.map((row) => {
-			const id = row['승인번호'].trim()
-			const value = parseInt(row['승인금액(원화)'].replace(/,/g, ''))
+      if (refundValue < 0) {
+        cardRefund[id] = refundValue;
+      }
+    });
 
-			if (value > 0) {
-				cardExtra[id] = value
-			}
+    cardExtraRaw.map((row) => {
+      const id = row["승인번호"].trim();
+      const value = parseInt(row["승인금액(원화)"].replace(/,/g, ""));
 
-			if (cardRefund[id] === 0 && cardRefund[id] === undefined) {
-				cardRefund[id] = 0
+      if (value > 0) {
+        cardExtra[id] = value;
+      }
 
-				if (value < 0) {
-					cardRefund[id] = value
-				}
-			}
-		})
+      if (cardRefund[id] === 0 && cardRefund[id] === undefined) {
+        cardRefund[id] = 0;
 
-		const data = await MySQL.execute(`
+        if (value < 0) {
+          cardRefund[id] = value;
+        }
+      }
+    });
+
+    const data = await MySQL.execute(
+      `
 			SELECT fo.created_at,
 						 null                                 as completed_at,
 						 od.recipient_name                    as name,
@@ -191,10 +194,16 @@ export class OrderFeed implements iFeed {
 						 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
 			WHERE fo.paid_at IS NOT NULL
 				AND fo.deleted_at IS NULL
-			  AND MONTH(fo.created_at + INTERVAL 9 HOUR) = MONTH('2022-05')
+				AND (
+					fo.created_at >= ? 
+					AND 
+					fo.created_at < ?
+				)
 			GROUP BY fo.fetching_order_number
 			ORDER BY fo.created_at ASC
-		`)
+		`,
+      [start, end]
+    );
 
 		const feed = data.map((row) => {
 			const refundAmount = row.refundAmount ?? 0
@@ -213,7 +222,7 @@ export class OrderFeed implements iFeed {
 				}
 			})
 
-			const remarks = []
+      const remarks = [];
 
 			let pgFee = 0, refundPgFee = 0
 
@@ -234,91 +243,81 @@ export class OrderFeed implements iFeed {
 				refundPgFee = Math.round(row.refundAmount * 0.016)
 			}
 
-			if (row.additionalPayInfo) {
-				for (const { amount, method } of row.additionalPayInfo) {
-					row.payAmount += amount
-					if (method === 'CARD') pgFee += Math.round(amount * 0.014)
-					else if (method === 'KAKAO')
-						pgFee += Math.round(amount * 0.015)
-					else if (method === 'NAVER')
-						pgFee += Math.round(amount * 0.015)
-					else if (method === 'ESCROW')
-						pgFee += Math.round(amount * 0.017)
-					else if (method === 'ESCROW_CARD')
-						pgFee += Math.round(amount * 0.016)
-				}
-			}
+      if (row.additionalPayInfo) {
+        for (const { amount, method } of row.additionalPayInfo) {
+          row.payAmount += amount;
+          if (method === "CARD") pgFee += Math.round(amount * 0.014);
+          else if (method === "KAKAO") pgFee += Math.round(amount * 0.015);
+          else if (method === "NAVER") pgFee += Math.round(amount * 0.015);
+          else if (method === "ESCROW") pgFee += Math.round(amount * 0.017);
+          else if (method === "ESCROW_CARD")
+            pgFee += Math.round(amount * 0.016);
+        }
+      }
 
 			const cardApprovalNumberList =
 				row.cardApprovalNumber?.split(',') ?? []
 
-			const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
-				const cardApprovalNumber = e.trim()
+      const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
+        const cardApprovalNumber = e.trim();
 
-				const refund = cardRefund[cardApprovalNumber] || 0
+        const refund = cardRefund[cardApprovalNumber] || 0;
 
-				return refund + acc
-			}, 0)
+        return refund + acc;
+      }, 0);
 
-			const cardPurchaseValue = cardApprovalNumberList.reduce(
-				(acc, e) => {
-					const cardApprovalNumber = e.trim()
+      const cardPurchaseValue = cardApprovalNumberList.reduce((acc, e) => {
+        const cardApprovalNumber = e.trim();
 
-					const value =
-						card[cardApprovalNumber] ||
-						cardExtra[cardApprovalNumber] ||
-						0
+        const value =
+          card[cardApprovalNumber] || cardExtra[cardApprovalNumber] || 0;
 
-					return value + acc
-				},
-				0,
-			)
+        return value + acc;
+      }, 0);
 
-			const itemPriceData: any = {}
-			row.itemPayAmountDetail.map((detail) =>
-				Object.values<any>(JSON.parse(detail)).forEach((data) => {
-					data.forEach((row) => {
-						if (itemPriceData[row.type])
-							itemPriceData[row.type] += row.rawValue
-						else itemPriceData[row.type] = row.rawValue
-					})
-				}),
-			)
+      const itemPriceData: any = {};
+      row.itemPayAmountDetail.map((detail) =>
+        Object.values<any>(JSON.parse(detail)).forEach((data) => {
+          data.forEach((row) => {
+            if (itemPriceData[row.type])
+              itemPriceData[row.type] += row.rawValue;
+            else itemPriceData[row.type] = row.rawValue;
+          });
+        })
+      );
 
-			if (
-				['DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'].includes(
-					row.returnReason,
-				) ||
-				!row.isReturned
-			) {
-				row.returnFee = 0
-			}
+      if (
+        ["DEFECTIVE_PRODUCT", "WRONG_DELIVERY"].includes(row.returnReason) ||
+        !row.isReturned
+      ) {
+        row.returnFee = 0;
+      }
 
-			if (row.cardApprovalNumber?.includes('매입')) {
-				remarks.push('매입')
-			}
+      if (row.cardApprovalNumber?.includes("매입")) {
+        remarks.push("매입");
+      }
 
-			// 매입환출 완료여부
-			let purchaseReturn = '환출미완료'
+      // 매입환출 완료여부
+      let purchaseReturn = "환출미완료";
 
-			if (
-				(row.itemStatusList?.includes('취소') ||
-					row.itemStatusList?.includes('반품')) &&
-				cardPurchaseValue !== 0
-			) {
-				if (cardRefundValue < 0) {
-					purchaseReturn = '환출완료'
-				}
-			} else {
-				purchaseReturn = '해당없음'
-			}
+      if (
+        (row.itemStatusList?.includes("취소") ||
+          row.itemStatusList?.includes("반품")) &&
+        cardPurchaseValue !== 0
+      ) {
+        if (cardRefundValue < 0) {
+          purchaseReturn = "환출완료";
+        }
+      } else {
+        purchaseReturn = "해당없음";
+      }
 
-			const taxTotal = tax[row.fetching_order_number] || 0
-			let taxRefund = 0
+      const taxTotal = tax[row.fetching_order_number] || 0;
+      let taxRefund = 0;
 
-			if (row.taxRefunded == 1) {
-				taxRefund = taxTotal
-			}
+      if (row.taxRefunded == 1) {
+        taxRefund = taxTotal;
+      }
 
 			const data = {
 				주문일: row.created_at,
@@ -357,36 +356,51 @@ export class OrderFeed implements iFeed {
 				// '매입환출 완료여부': purchaseReturn,
 			}
 
-			// if (row.fetching_order_number == '20220210-0000004') {
-			// 	console.log(data)
-			// }
+      return data;
+    });
 
-			// if (row.fetching_order_number == '20220209-0000032') {
-			// 	console.log(data)
-			// }
+    return parse(feed, {
+      fields: Object.keys(feed[0]),
+      delimiter: ",",
+      quote: '"',
+    });
+  }
 
-			return data
-		})
+  async upload() {
+    console.log(
+      await S3Client.upload({
+        folderName: "feeds",
+        fileName: "2월.csv",
+        buffer: await this.getTsvBufferWithRange(
+          new Date("2022-02-01T00:00:00.000Z"),
+          new Date("2022-03-01T00:00:00.000Z")
+        ),
+        contentType: "text/csv",
+      })
+    );
 
-		return parse(feed, {
-			fields: Object.keys(feed[0]),
-			delimiter: ',',
-			quote: '"',
-		})
-	}
+    console.log(
+      await S3Client.upload({
+        folderName: "feeds",
+        fileName: "3월.csv",
+        buffer: await this.getTsvBufferWithRange(
+          new Date("2022-03-01T00:00:00.000Z"),
+          new Date("2022-04-01T00:00:00.000Z")
+        ),
+        contentType: "text/csv",
+      })
+    );
 
-	async upload() {
-		const buffer = await this.getTsvBuffer()
-
-		const feedUrl = await S3Client.upload({
-			folderName: 'feeds',
-			fileName: 'order-feed-5.csv',
-			buffer,
-			contentType: 'text/csv',
-		})
-
-		writeFileSync('asdf.csv', buffer)
-
-		console.log(`FEED_URL: ${feedUrl}`)
-	}
+    console.log(
+      await S3Client.upload({
+        folderName: "feeds",
+        fileName: "4월.csv",
+        buffer: await this.getTsvBufferWithRange(
+          new Date("2022-04-01T00:00:00.000Z"),
+          new Date("2022-05-01T00:00:00.000Z")
+        ),
+        contentType: "text/csv",
+      })
+    );
+  }
 }
