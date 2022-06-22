@@ -172,7 +172,10 @@ export class OrderFeed implements iFeed {
 							where 1=1
 								and refund.tax_refund_status = 'ACCEPT'
 								and refund.fetching_order_number = fo.fetching_order_number
-						 ) AS taxRefunded
+						 ) AS taxRefunded,
+			       so.is_ddp_service AS isDDP,
+			       dm.name AS deliveryMethodName,
+						 dm.country AS deliveryMethodCountry
 			FROM commerce.fetching_order fo
 						 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
 						 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
@@ -182,16 +185,25 @@ export class OrderFeed implements iFeed {
 						 JOIN commerce.user u on fo.user_id = u.idx
 						 JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
 						 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
+			       JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
 						 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
 						 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
 						 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
 			WHERE fo.paid_at IS NOT NULL
 				AND fo.deleted_at IS NULL
+			  AND MONTH(fo.created_at + INTERVAL 9 HOUR) = MONTH('2022-05')
 			GROUP BY fo.fetching_order_number
 			ORDER BY fo.created_at ASC
 		`)
 
 		const feed = data.map((row) => {
+			const refundAmount = row.refundAmount ?? 0
+			// const salesAmount = row.payAmount - refundAmount
+			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
+			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
+
+			// const profit = salesAmount - totalTotalPrice
+
 			const priceData: any = {}
 			JSON.parse(row.payAmountDetail).forEach((row) => {
 				if (priceData[row.type]) {
@@ -203,18 +215,24 @@ export class OrderFeed implements iFeed {
 
 			const remarks = []
 
-			let pgFee = 0
+			let pgFee = 0, refundPgFee = 0
 
-			if (row.pay_method === 'CARD')
+			if (row.pay_method === 'CARD') {
 				pgFee = Math.round(row.payAmount * 0.014)
-			else if (row.pay_method === 'KAKAO')
+				refundPgFee = Math.round(row.refundAmount * 0.014)
+			} else if (row.pay_method === 'KAKAO') {
 				pgFee = Math.round(row.payAmount * 0.015)
-			else if (row.pay_method === 'NAVER')
+				refundPgFee = Math.round(row.refundAmount * 0.015)
+			} else if (row.pay_method === 'NAVER') {
 				pgFee = Math.round(row.payAmount * 0.015)
-			else if (row.pay_method === 'ESCROW')
+				refundPgFee = Math.round(row.refundAmount * 0.015)
+			} else if (row.pay_method === 'ESCROW') {
 				pgFee = Math.round(row.payAmount * 0.017)
-			else if (row.pay_method === 'ESCROW_CARD')
+				refundPgFee = Math.round(row.refundAmount * 0.017)
+			} else if (row.pay_method === 'ESCROW_CARD') {
 				pgFee = Math.round(row.payAmount * 0.016)
+				refundPgFee = Math.round(row.refundAmount * 0.016)
+			}
 
 			if (row.additionalPayInfo) {
 				for (const { amount, method } of row.additionalPayInfo) {
@@ -230,13 +248,6 @@ export class OrderFeed implements iFeed {
 						pgFee += Math.round(amount * 0.016)
 				}
 			}
-
-			const refundAmount = row.refundAmount ?? 0
-			// const salesAmount = row.payAmount - refundAmount
-			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
-			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
-
-			// const profit = salesAmount - totalTotalPrice
 
 			const cardApprovalNumberList =
 				row.cardApprovalNumber?.split(',') ?? []
@@ -311,10 +322,9 @@ export class OrderFeed implements iFeed {
 
 			const data = {
 				주문일: row.created_at,
-				구매확정일: row.completed_at,
 				상태: row.itemStatusList,
-				주문자: row.name,
-				전화번호: decryptInfo(row.phone) + ' ',
+				'배송 유형': `${row.deliveryMethodName} ${row.deliveryMethodCountry}`,
+				구매확정일: row.completed_at,
 				편집샵명: row.shop_name,
 				상품명: row.itemName,
 				주문번호: row.fetching_order_number,
@@ -323,20 +333,28 @@ export class OrderFeed implements iFeed {
 				'결제 방식': row.pay_method,
 				'페칭 판매가': priceData['ORIGIN_PRICE'],
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
+				'롯데카드 캐시백': (cardPurchaseValue - cardRefundValue) * 0.025,
 				쿠폰: row.couponDiscountAmount,
 				적립금: row.pointDiscountAmount,
 				결제가: row.payAmount,
 				환불금액: refundAmount,
 				PG수수료: pgFee,
-				'엘덱스 비용': eldex[row.invoice] || 0,
-				관부가세: taxTotal,
+				'예상 엘덱스 비용': itemPriceData['ADDITIONAL_FEE'] || 0,
+				'실 엘덱스 비용': eldex[row.invoice] || 0,
+				'예상 관부가세': itemPriceData['DUTY_AND_TAX'] || 0,
+				'납부 관부가세': taxTotal,
 				'관부가세 환급': taxRefund,
-				'PG수수료 환불': row.refundAmount ? pgFee : 0,
-				'매입 금액': cardPurchaseValue,
+				'PG수수료 환불': refundPgFee,
+				'예상 매입 금액': itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0), // TODO
+				'실 매입 금액': cardPurchaseValue,
+				'예상 매입환출금': -cardPurchaseValue,
 				'실 매입환출금액': -cardRefundValue,
-				'매입환출 완료여부': purchaseReturn,
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
+				발주담당자: null,
+				// 주문자: row.name,
+				// 전화번호: decryptInfo(row.phone) + ' ',
+				// '매입환출 완료여부': purchaseReturn,
 			}
 
 			// if (row.fetching_order_number == '20220210-0000004') {
@@ -362,7 +380,7 @@ export class OrderFeed implements iFeed {
 
 		const feedUrl = await S3Client.upload({
 			folderName: 'feeds',
-			fileName: 'order-feed.csv',
+			fileName: 'order-feed-5.csv',
 			buffer,
 			contentType: 'text/csv',
 		})
