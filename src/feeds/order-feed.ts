@@ -8,17 +8,18 @@ import { MySQL, S3Client } from '../utils'
 import { decryptInfo } from '../utils/privacy-encryption'
 import { writeFileSync } from 'fs'
 import { map } from 'lodash'
+import {retry} from '@fetching-korea/common-utils'
 
 export class OrderFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
-		return Buffer.from(await this.getTsv(null, null), 'utf-8')
+		return Buffer.from(await this.getTsv({start: null, end: null}), 'utf-8')
 	}
 
-	async getTsvBufferWithRange(start: Date, end: Date): Promise<Buffer> {
-		return Buffer.from(await this.getTsv(start, end), 'utf-8')
+	async getTsvBufferWithRange(start: Date, end: Date, targetSheetId = null): Promise<Buffer> {
+		return Buffer.from(await this.getTsv({start, end, targetSheetId}), 'utf-8')
 	}
 
-	async getTsv(start: Date, end: Date): Promise<string> {
+	async getTsv({start, end, targetSheetId}: {start: Date, end: Date, targetSheetId?: string}): Promise<string> {
 		// 재무 시트
 		const doc = new GoogleSpreadsheet(
 			'1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0'
@@ -178,7 +179,13 @@ export class OrderFeed implements iFeed {
 						 ) AS taxRefunded,
 			       so.is_ddp_service AS isDDP,
 			       dm.name AS deliveryMethodName,
-						 dm.country AS deliveryMethodCountry
+						 dm.country AS deliveryMethodCountry,
+						 (SELECT u.name
+							FROM commerce.fetching_order_memo fom
+										 JOIN fetching_dev.users u ON fom.admin_id = u.idx
+							WHERE fom.fetching_order_number = fo.fetching_order_number
+							ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
+							LIMIT 1)                                                     AS assignee
 			FROM commerce.fetching_order fo
 						 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
 						 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
@@ -359,6 +366,32 @@ export class OrderFeed implements iFeed {
 			return data
 		})
 
+		console.log(targetSheetId)
+		if (targetSheetId) {
+			let targetSheet = doc.sheetsById[targetSheetId]
+			const rows = await targetSheet.getRows()
+			for (const i in feed) {
+				if (rows[i]) {
+					let isModified = false
+					for (const key of Object.keys(feed[i])) {
+						if (rows[i][key] != feed[i][key]) {
+							rows[i][key] = feed[i][key]
+							isModified = true
+						}
+					}
+					if (isModified) {
+						await retry(3, 1000)(async e => {
+							await rows[i].save()
+						})
+					}
+				} else {
+					await retry(3, 1000)(async e => {
+						await targetSheet.addRow(feed[i])
+					})
+				}
+			}
+		}
+
 		return parse(feed, {
 			fields: Object.keys(feed[0]),
 			delimiter: ',',
@@ -398,6 +431,19 @@ export class OrderFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-04-01T00:00:00.000Z'),
 					new Date('2022-05-01T00:00:00.000Z')
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '5월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-05-01T00:00:00.000Z'),
+					new Date('2022-06-01T00:00:00.000Z'),
+					'738638695'
 				),
 				contentType: 'text/csv',
 			})

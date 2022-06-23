@@ -18,6 +18,7 @@
   "license": "ISC",
   "dependencies": {
     "@elastic/elasticsearch": "^7.16.0",
+    "@fetching-korea/common-utils": "^1.0.6",
     "aws-sdk": "^2.827.0",
     "bluebird": "^3.7.2",
     "commander": "^6.2.1",
