@@ -22,7 +22,7 @@ class TSVFormat {
 		if (itemName.includes(brandName)) itemName = itemName.replace(brandName, '').trim()
 		if (itemName.includes(brandNameKor)) itemName = itemName.replace(brandNameKor, '').trim()
 
-		let title = `${mainName} ${itemName} ${mpn ? mpn : [72, 78, 80].includes(shopId) ? '' : itemCode} ${this.color(customColor)}`
+		let title = `${mainName} ${itemName} ${mpn ? mpn : [72, 78, 80].includes(shopId) ? '' : itemCode} ${this.color(customColor)} [관부가세 포함]`
 			.split(' ').filter(str => str).join(' ')
 
 		title = title.replace('è', 'e')
