@@ -174,7 +174,7 @@ export class OrderFeed implements iFeed {
 							select 1 
 							from commerce.order_refund refund
 							where 1=1
-								and refund.tax_refund_status = 'ACCEPT'
+								and refund.status = 'ACCEPT'
 								and refund.fetching_order_number = fo.fetching_order_number
 						 ) AS taxRefunded,
 			       so.is_ddp_service AS isDDP,
@@ -366,7 +366,6 @@ export class OrderFeed implements iFeed {
 			return data
 		})
 
-		console.log(targetSheetId)
 		if (targetSheetId) {
 			let targetSheet = doc.sheetsById[targetSheetId]
 			const rows = await targetSheet.getRows()
@@ -380,12 +379,12 @@ export class OrderFeed implements iFeed {
 						}
 					}
 					if (isModified) {
-						await retry(3, 1000)(async e => {
+						await retry(3, 3000)(async () => {
 							await rows[i].save()
 						})
 					}
 				} else {
-					await retry(3, 1000)(async e => {
+					await retry(3, 3000)(async () => {
 						await targetSheet.addRow(feed[i])
 					})
 				}
