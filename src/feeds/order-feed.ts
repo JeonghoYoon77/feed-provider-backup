@@ -353,7 +353,7 @@ export class OrderFeed implements iFeed {
 				'PG수수료 환불': refundPgFee,
 				'예상 매입 금액': itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0), // TODO
 				'실 매입 금액': cardPurchaseValue,
-				'예상 매입환출금': -cardPurchaseValue,
+				'예상 매입환출금': row.isCanceled ? -cardPurchaseValue : 0,
 				'실 매입환출금액': -cardRefundValue,
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
