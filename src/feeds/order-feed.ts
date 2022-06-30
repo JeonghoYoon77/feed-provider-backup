@@ -8,7 +8,7 @@ import { MySQL, S3Client } from '../utils'
 import { decryptInfo } from '../utils/privacy-encryption'
 import { writeFileSync } from 'fs'
 import { map } from 'lodash'
-import {retry} from '@fetching-korea/common-utils'
+import {retry, sleep} from '@fetching-korea/common-utils'
 
 export class OrderFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
@@ -91,9 +91,14 @@ export class OrderFeed implements iFeed {
 		cardExtraRaw.map((row) => {
 			const id = row['승인번호'].trim()
 			const value = parseInt(row['승인금액(원화)'].replace(/,/g, ''))
+			const isCanceled = row['취소여부'] === 'Y'
 
 			if (value > 0) {
-				cardExtra[id] = value
+				if (isCanceled) {
+					cardRefund[id] = -value
+				} else {
+					cardExtra[id] = value
+				}
 			}
 
 			if (cardRefund[id] === 0 && cardRefund[id] === undefined) {
@@ -202,7 +207,7 @@ export class OrderFeed implements iFeed {
 			WHERE fo.paid_at IS NOT NULL
 				AND fo.deleted_at IS NULL
 				AND (
-					(fo.created_at + INTERVAL 9 HOUR)>= ? 
+					(fo.created_at + INTERVAL 9 HOUR) >= ? 
 					AND
           (fo.created_at + INTERVAL 9 HOUR) < ?
 				)
@@ -353,7 +358,7 @@ export class OrderFeed implements iFeed {
 				'PG수수료 환불': refundPgFee,
 				'예상 매입 금액': itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0), // TODO
 				'실 매입 금액': cardPurchaseValue,
-				'예상 매입환출금': row.isCanceled ? -cardPurchaseValue : 0,
+				'예상 매입환출금': (row.isCanceled || row.isReturned) && row.vendorOrderNumber ? -cardPurchaseValue : 0,
 				'실 매입환출금액': -cardRefundValue,
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
@@ -382,11 +387,13 @@ export class OrderFeed implements iFeed {
 						await retry(3, 3000)(async () => {
 							await rows[i].save()
 						})
+						await sleep(500)
 					}
 				} else {
 					await retry(3, 3000)(async () => {
 						await targetSheet.addRow(feed[i])
 					})
+					await sleep(500)
 				}
 			}
 		}
@@ -399,7 +406,7 @@ export class OrderFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2월.csv',
@@ -433,7 +440,7 @@ export class OrderFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
 		console.log(
 			await S3Client.upload({
@@ -443,6 +450,19 @@ export class OrderFeed implements iFeed {
 					new Date('2022-05-01T00:00:00.000Z'),
 					new Date('2022-06-01T00:00:00.000Z'),
 					'738638695'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '6월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-06-01T00:00:00.000Z'),
+					new Date('2022-07-01T00:00:00.000Z'),
+					'806883469'
 				),
 				contentType: 'text/csv',
 			})
