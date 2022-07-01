@@ -378,7 +378,7 @@ export class OrderFeed implements iFeed {
 				if (rows[i]) {
 					let isModified = false
 					for (const key of Object.keys(feed[i])) {
-						if (rows[i][key] != feed[i][key]) {
+						if (rows[i][key] != feed[i][key] && feed[i][key]) {
 							rows[i][key] = feed[i][key]
 							isModified = true
 						}
