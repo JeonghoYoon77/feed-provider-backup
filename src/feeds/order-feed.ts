@@ -7,7 +7,7 @@ import { iFeed } from './feed'
 import { MySQL, S3Client } from '../utils'
 import { decryptInfo } from '../utils/privacy-encryption'
 import { writeFileSync } from 'fs'
-import { map } from 'lodash'
+import {isString, map} from 'lodash'
 import {retry, sleep} from '@fetching-korea/common-utils'
 
 export class OrderFeed implements iFeed {
@@ -58,19 +58,21 @@ export class OrderFeed implements iFeed {
 		const cardRefund = {}
 		const tax = {}
 
-		eldexRaw.map((row) => {
+		eldexRaw.forEach((row) => {
 			const id = row['송장번호']
 			const value = row['2차결제금액(원)'].replace(/,/g, '')
 			eldex[id] = parseInt(value)
 		})
 
-		taxRaw.map((row) => {
-			const id = row['주문번호'].trim()
-			const value = row['금액'].replace(/,/g, '')
-			tax[id] = parseInt(value)
+		taxRaw.forEach((row) => {
+			if(row['주문번호']) {
+				const id = row['주문번호'].trim()
+				const value = row['금액'].replace(/,/g, '')
+				tax[id] = parseInt(value)
+			}
 		})
 
-		cardRaw.map((row) => {
+		cardRaw.forEach((row) => {
 			const id = row['승인번호'].trim()
 			const value = parseInt(row['청구금액'].replace(/,/g, ''))
 			const refundValue = parseInt(row['전월취소및부분취소'].replace(/,/g, ''))
@@ -88,7 +90,7 @@ export class OrderFeed implements iFeed {
 			}
 		})
 
-		cardExtraRaw.map((row) => {
+		cardExtraRaw.forEach((row) => {
 			const id = row['승인번호'].trim()
 			const value = parseInt(row['승인금액(원화)'].replace(/,/g, ''))
 			const isCanceled = row['취소여부'] === 'Y'
@@ -183,6 +185,7 @@ export class OrderFeed implements iFeed {
 								and refund.fetching_order_number = fo.fetching_order_number
 						 ) AS taxRefunded,
 			       so.is_ddp_service AS isDDP,
+						 weight as weight,
 			       dm.name AS deliveryMethodName,
 						 dm.country AS deliveryMethodCountry,
 						 (SELECT u.name
@@ -201,6 +204,7 @@ export class OrderFeed implements iFeed {
 						 JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
 						 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
 			       JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
+						 LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
 						 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
 						 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
 						 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
@@ -216,6 +220,10 @@ export class OrderFeed implements iFeed {
 		`,
 			[start, end]
 		)
+
+		const [{currencyRate}] = await MySQL.execute(`
+			SELECT currency_rate as currencyRate FROM currency_info WHERE currency_tag = 'EUR'
+		`)
 
 		const feed = data.map((row) => {
 			const refundAmount = row.refundAmount ?? 0
@@ -278,7 +286,7 @@ export class OrderFeed implements iFeed {
 				return refund + acc
 			}, 0)
 
-			const cardPurchaseValue = cardApprovalNumberList.reduce((acc, e) => {
+			let cardPurchaseValue = cardApprovalNumberList.reduce((acc, e) => {
 				const cardApprovalNumber = e.trim()
 
 				const value =
@@ -331,6 +339,18 @@ export class OrderFeed implements iFeed {
 				taxRefund = taxTotal
 			}
 
+			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
+
+
+			if (row.cardApprovalNumber === '파스토') cardPurchaseValue = purchaseValue
+
+			let waypointDeliveryFee = eldex[row.invoice] ?? 0
+
+			if (row.weight) {
+				console.log(row.fetching_order_number, row.cardApprovalNumber, row.cardApprovalNumber === '파스토', purchaseValue, cardPurchaseValue)
+				waypointDeliveryFee = ((row.weight < 1 ? 3 + 3.2 + 1.5 : 3 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3)
+			}
+
 			const data = {
 				주문일: row.created_at,
 				상태: row.itemStatusList,
@@ -344,25 +364,25 @@ export class OrderFeed implements iFeed {
 				'결제 방식': row.pay_method,
 				'페칭 판매가': priceData['ORIGIN_PRICE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0),
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
-				'롯데카드 캐시백': (cardPurchaseValue - cardRefundValue) * 0.025,
+				'롯데카드 캐시백': ((cardPurchaseValue - cardRefundValue) * 0.025).toFixed(3),
 				쿠폰: row.couponDiscountAmount,
 				적립금: row.pointDiscountAmount,
 				결제가: row.payAmount,
 				환불금액: refundAmount,
-				PG수수료: pgFee,
-				'예상 엘덱스 비용': itemPriceData['ADDITIONAL_FEE'] || 0,
-				'실 엘덱스 비용': eldex[row.invoice] || 0,
+				'PG수수료': pgFee,
+				'예상 배대지 비용': itemPriceData['ADDITIONAL_FEE'] || 0,
+				'실 배대지 비용': waypointDeliveryFee,
 				'예상 관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']),
 				'납부 관부가세': taxTotal,
 				'관부가세 환급': taxRefund,
 				'PG수수료 환불': refundPgFee,
-				'예상 매입 금액': itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0), // TODO
+				'예상 매입 금액': purchaseValue,
 				'실 매입 금액': cardPurchaseValue,
 				'예상 매입환출금': (row.isCanceled || row.isReturned) && row.vendorOrderNumber ? -cardPurchaseValue : 0,
 				'실 매입환출금액': -cardRefundValue,
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
-				발주담당자: row.assignee,
+				'발주 담당자': row.assignee,
 				// 주문자: row.name,
 				// 전화번호: decryptInfo(row.phone) + ' ',
 				// '매입환출 완료여부': purchaseReturn,
@@ -378,7 +398,7 @@ export class OrderFeed implements iFeed {
 				if (rows[i]) {
 					let isModified = false
 					for (const key of Object.keys(feed[i])) {
-						if (rows[i][key] != feed[i][key] && feed[i][key]) {
+						if ((rows[i][key] != (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) && feed[i][key]) {
 							rows[i][key] = feed[i][key]
 							isModified = true
 						}
