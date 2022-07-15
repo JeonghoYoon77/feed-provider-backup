@@ -370,6 +370,7 @@ export class OrderFeed implements iFeed {
 				결제가: row.payAmount,
 				환불금액: refundAmount,
 				'PG수수료': pgFee,
+				'운송장번호': row.invoice,
 				'예상 배대지 비용': itemPriceData['ADDITIONAL_FEE'] || 0,
 				'실 배대지 비용': waypointDeliveryFee,
 				'예상 관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']),
