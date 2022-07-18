@@ -397,8 +397,6 @@ export class OrderFeed implements iFeed {
 				if (rows[i]) {
 					let isModified = false
 					for (const key of Object.keys(feed[i])) {
-							isModified = true
-						}
 						if (!feed[i][key]) continue
 						if (['실 배대지 비용'].includes(key)) continue
 						if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
