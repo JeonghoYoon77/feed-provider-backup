@@ -1,14 +1,13 @@
+import {retry, sleep} from '@fetching-korea/common-utils'
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { parse } from 'json2csv'
+import {isDate, isString, parseInt} from 'lodash'
 
 import sheetData from '../../fetching-sheet.json'
 
-import { iFeed } from './feed'
 import { MySQL, S3Client } from '../utils'
-import { decryptInfo } from '../utils/privacy-encryption'
-import { writeFileSync } from 'fs'
-import {isString, map} from 'lodash'
-import {retry, sleep} from '@fetching-korea/common-utils'
+
+import { iFeed } from './feed'
 
 export class OrderFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
@@ -347,7 +346,6 @@ export class OrderFeed implements iFeed {
 			let waypointDeliveryFee = eldex[row.invoice] ?? 0
 
 			if (row.weight) {
-				console.log(row.fetching_order_number, row.cardApprovalNumber, row.cardApprovalNumber === '파스토', purchaseValue, cardPurchaseValue)
 				waypointDeliveryFee = ((row.weight < 1 ? 3 + 3.2 + 1.5 : 3 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3)
 			}
 
@@ -399,10 +397,16 @@ export class OrderFeed implements iFeed {
 				if (rows[i]) {
 					let isModified = false
 					for (const key of Object.keys(feed[i])) {
-						if ((rows[i][key] != (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) && feed[i][key]) {
-							rows[i][key] = feed[i][key]
 							isModified = true
 						}
+						if (!feed[i][key]) continue
+						if (['실 배대지 비용'].includes(key)) continue
+						if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
+						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
+						if ((parseFloat(rows[i][key].replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
+
+						rows[i][key] = feed[i][key]
+						isModified = true
 					}
 					if (isModified) {
 						await retry(3, 3000)(async () => {
@@ -484,6 +488,19 @@ export class OrderFeed implements iFeed {
 					new Date('2022-06-01T00:00:00.000Z'),
 					new Date('2022-07-01T00:00:00.000Z'),
 					'806883469'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '7월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-07-01T00:00:00.000Z'),
+					new Date('2022-08-01T00:00:00.000Z'),
+					'2046794903'
 				),
 				contentType: 'text/csv',
 			})
