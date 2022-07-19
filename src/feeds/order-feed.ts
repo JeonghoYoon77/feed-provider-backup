@@ -113,109 +113,112 @@ export class OrderFeed implements iFeed {
 
 		const data = await MySQL.execute(
 			`
-			SELECT fo.created_at,
-						 null                                 as completed_at,
-						 od.recipient_name                    as name,
-						 od.phone_number                      as phone,
-						 si.shop_name,
-						 GROUP_CONCAT(DISTINCT ii.item_name)  AS itemName,
-						 fo.fetching_order_number,
-						 GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ') AS vendorOrderNumber,
-						 GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ') AS cardApprovalNumber,
-						 fo.pay_amount                        AS payAmount,
-						 (
-							 SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
-							 FROM commerce.order_additional_pay oap
-							     JOIN commerce.order_additional_pay_item oapi ON oapi.order_additional_number = oap.order_additional_number AND oapi.status = 'PAID'
-							 WHERE oap.fetching_order_number = fo.fetching_order_number
-						 )                                    AS additionalPayInfo,
-						 fo.status,
-						 fo.order_path,
-						 fo.pay_method,
-						 oc.order_cancel_number IS NOT NULL   AS isCanceled,
-						 oe.order_exchange_number IS NOT NULL AS isExchanged,
-						 oret.order_return_number IS NOT NULL AS isReturned,
-						 (
-							SELECT GROUP_CONCAT( DISTINCT 
-								case
-									when ori2.return_item_number is not null
-									then '반품'
-									when oci2.cancel_item_number is not null 
-									then '주문 취소'
-									when fo.status = 'COMPLETE'
-									then '구매 확정'
-									when so.status not in ('BEFORE_DEPOSIT','ORDER_AVAILABLE','ORDER_WAITING','PRE_ORDER_REQUIRED','ORDER_DELAY')
-									then '주문 완료'
-									else ''
-								end 
-							)
-							FROM commerce.item_order io2
-							inner join commerce.shop_order so2 
-							on 1=1
-								and so2.shop_order_number = io2.shop_order_number
-							left join commerce.order_cancel_item oci2 
-							on 1=1
-								and io2.item_order_number = oci2.item_order_number 
-							left join commerce.order_return_item ori2
-							on 1=1
-								and io2.item_order_number = ori2.item_order_number 
-							WHERE 1=1
-								AND so2.fetching_order_number = fo.fetching_order_number 
-						) as itemStatusList,
-						 ssi.customer_negligence_return_fee   AS returnFee,
-						 oret.reason_type                     AS returnReason,
-						 fo.status                            AS orderStatus,
-						 so.status                            AS shopStatus,
-						 io.invoice                           AS invoice,
-						 case 
-							when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
-							then fo.pay_amount
-							else oref.refund_amount
-						 end                   				  AS refundAmount,
-						 fo.pay_amount_detail                 AS payAmountDetail,
-						 JSON_ARRAYAGG(io.pay_amount_detail)  AS itemPayAmountDetail,
-						 COALESCE(fo.coupon_discount_amount, 0) AS couponDiscountAmount,
-						 COALESCE(fo.use_point, 0) as pointDiscountAmount,
-						 exists(
-							select 1 
-							from commerce.order_refund refund
-							where 1=1
-								and refund.status = 'ACCEPT'
-								and refund.fetching_order_number = fo.fetching_order_number
-						 ) AS taxRefunded,
-			       so.is_ddp_service AS isDDP,
-						 weight as weight,
-			       dm.name AS deliveryMethodName,
-						 dm.country AS deliveryMethodCountry,
-						 (SELECT u.name
-							FROM commerce.fetching_order_memo fom
-										 JOIN fetching_dev.users u ON fom.admin_id = u.idx
-							WHERE fom.fetching_order_number = fo.fetching_order_number
-							ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
-							LIMIT 1)                                                     AS assignee
-			FROM commerce.fetching_order fo
-						 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
-						 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
-						 LEFT JOIN commerce.order_return oret on fo.fetching_order_number = oret.fetching_order_number
-						 LEFT JOIN commerce.order_refund oref on fo.fetching_order_number = oref.fetching_order_number
-						 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
-						 JOIN commerce.user u on fo.user_id = u.idx
-						 JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
-						 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
-			       JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
-						 LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
-						 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
-						 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
-						 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
-			WHERE fo.paid_at IS NOT NULL
-				AND fo.deleted_at IS NULL
-				AND (
-					(fo.created_at + INTERVAL 9 HOUR) >= ? 
-					AND
-          (fo.created_at + INTERVAL 9 HOUR) < ?
-				)
-			GROUP BY fo.fetching_order_number
-			ORDER BY fo.created_at ASC
+				SELECT fo.created_at,
+							 so.shipping_completed_at + INTERVAL 1 WEEK                    as completed_at,
+							 od.recipient_name                                             as name,
+							 od.phone_number                                               as phone,
+							 si.shop_name,
+							 GROUP_CONCAT(DISTINCT ii.item_name)                           AS itemName,
+							 fo.fetching_order_number,
+							 GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ')  AS vendorOrderNumber,
+							 GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ') AS cardApprovalNumber,
+							 fo.pay_amount                                                 AS payAmount,
+							 (
+								 SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
+								 FROM commerce.order_additional_pay oap
+												JOIN commerce.order_additional_pay_item oapi
+														 ON oapi.order_additional_number = oap.order_additional_number AND oapi.status = 'PAID'
+								 WHERE oap.fetching_order_number = fo.fetching_order_number
+							 )                                                             AS additionalPayInfo,
+							 fo.status,
+							 fo.order_path,
+							 fo.pay_method,
+							 oc.order_cancel_number IS NOT NULL                            AS isCanceled,
+							 oe.order_exchange_number IS NOT NULL                          AS isExchanged,
+							 oret.order_return_number IS NOT NULL                          AS isReturned,
+							 (
+								 SELECT GROUP_CONCAT(DISTINCT
+																		 case
+																			 when ori2.return_item_number is not null
+																				 then '반품'
+																			 when oci2.cancel_item_number is not null
+																				 then '주문 취소'
+																			 when fo.status = 'COMPLETE'
+																				 then '구매 확정'
+																			 when so.status not in
+																						('BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED',
+																						 'ORDER_DELAY')
+																				 then '주문 완료'
+																			 else ''
+																			 end
+													)
+								 FROM commerce.item_order io2
+												inner join commerce.shop_order so2
+																	 on 1 = 1
+																		 and so2.shop_order_number = io2.shop_order_number
+												left join commerce.order_cancel_item oci2
+																	on 1 = 1
+																		and io2.item_order_number = oci2.item_order_number
+												left join commerce.order_return_item ori2
+																	on 1 = 1
+																		and io2.item_order_number = ori2.item_order_number
+								 WHERE 1 = 1
+									 AND so2.fetching_order_number = fo.fetching_order_number
+							 )                                                             as itemStatusList,
+							 ssi.customer_negligence_return_fee                            AS returnFee,
+							 oret.reason_type                                              AS returnReason,
+							 fo.status                                                     AS orderStatus,
+							 so.status                                                     AS shopStatus,
+							 io.invoice                                                    AS invoice,
+							 case
+								 when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
+									 then fo.pay_amount
+								 else oref.refund_amount
+								 end                                                         AS refundAmount,
+							 fo.pay_amount_detail                                          AS payAmountDetail,
+							 JSON_ARRAYAGG(io.pay_amount_detail)                           AS itemPayAmountDetail,
+							 COALESCE(fo.coupon_discount_amount, 0)                        AS couponDiscountAmount,
+							 COALESCE(fo.use_point, 0)                                     as pointDiscountAmount,
+							 exists(
+								 select 1
+								 from commerce.order_refund refund
+								 where 1 = 1
+									 and refund.status = 'ACCEPT'
+									 and refund.fetching_order_number = fo.fetching_order_number
+								 )                                                           AS taxRefunded,
+							 so.is_ddp_service                                             AS isDDP,
+							 weight                                                        as weight,
+							 dm.name                                                       AS deliveryMethodName,
+							 dm.country                                                    AS deliveryMethodCountry,
+							 (SELECT u.name
+								FROM commerce.fetching_order_memo fom
+											 JOIN fetching_dev.users u ON fom.admin_id = u.idx
+								WHERE fom.fetching_order_number = fo.fetching_order_number
+								ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
+								LIMIT 1)                                                     AS assignee
+				FROM commerce.fetching_order fo
+							 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
+							 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
+							 LEFT JOIN commerce.order_return oret on fo.fetching_order_number = oret.fetching_order_number
+							 LEFT JOIN commerce.order_refund oref on fo.fetching_order_number = oref.fetching_order_number
+							 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
+							 JOIN commerce.user u on fo.user_id = u.idx
+							 JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
+							 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
+							 JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
+							 LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
+							 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
+							 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
+							 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
+				WHERE fo.paid_at IS NOT NULL
+					AND fo.deleted_at IS NULL
+					AND (
+							(fo.created_at + INTERVAL 9 HOUR) >= ?
+						AND
+							(fo.created_at + INTERVAL 9 HOUR) < ?
+					)
+				GROUP BY fo.fetching_order_number
+				ORDER BY fo.created_at ASC
 		`,
 			[start, end]
 		)
