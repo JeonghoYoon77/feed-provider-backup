@@ -137,7 +137,7 @@ export class OrderFeed implements iFeed {
 							 oe.order_exchange_number IS NOT NULL                          AS isExchanged,
 							 oret.order_return_number IS NOT NULL                          AS isReturned,
 							 (
-								 SELECT GROUP_CONCAT(DISTINCT
+								 SELECT JSON_ARRAYAGG(
 																		 case
 																			 when ori2.return_item_number is not null
 																				 then '반품'
@@ -323,7 +323,7 @@ export class OrderFeed implements iFeed {
 			let purchaseReturn = '환출미완료'
 
 			if (
-				(row.itemStatusList?.includes('취소') ||
+				(row.itemStatusList?.includes('주문 취소') ||
           row.itemStatusList?.includes('반품')) &&
         cardPurchaseValue !== 0
 			) {
@@ -352,9 +352,32 @@ export class OrderFeed implements iFeed {
 				waypointDeliveryFee = ((row.weight < 1 ? 3 + 3.2 + 1.5 : 3 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3)
 			}
 
+			let settleCount = 0
+			let completeCount = 0
+			let cancelCount = 0
+			let returnCount = 0
+
+			// '반품', '주문 취소', '구매 확정', '주문 완료'
+			for (const status of row.itemStatusList) {
+				if (status === '구매 확정') settleCount++
+				if (status === '주문 완료') completeCount++
+				if (status === '주문 취소') cancelCount++
+				if (status === '반품') returnCount++
+			}
+
+			let status = ''
+			if (!settleCount && !completeCount && cancelCount && !returnCount) status = '주문 취소'
+			else if (!settleCount && completeCount && !cancelCount && !returnCount) status = '주문 완료'
+			else if (settleCount && !completeCount && !cancelCount && !returnCount) status = '구매 확정'
+			else if (!settleCount && !completeCount && !cancelCount && returnCount) status = '반품'
+			else if (!settleCount && completeCount && cancelCount && !returnCount) status = '주문 완료, 일부 취소'
+			else if (settleCount && !completeCount && cancelCount && !returnCount) status = '구매 확정, 일부 취소'
+			else if (!settleCount && completeCount && !cancelCount && returnCount) status = '주문 완료, 일부 반품'
+			else if (settleCount && !completeCount && !cancelCount && returnCount) status = '구매 확정, 일부 반품'
+
 			const data = {
 				주문일: row.created_at,
-				상태: row.itemStatusList,
+				상태: status,
 				'배송 유형': `${row.deliveryMethodName} ${row.deliveryMethodCountry}`,
 				구매확정일: row.completed_at,
 				편집샵명: row.shop_name,
@@ -404,7 +427,7 @@ export class OrderFeed implements iFeed {
 						if (['실 배대지 비용'].includes(key)) continue
 						if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
-						if ((parseFloat(rows[i][key].replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
+						if ((parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
 						rows[i][key] = feed[i][key]
 						isModified = true
@@ -432,13 +455,27 @@ export class OrderFeed implements iFeed {
 	}
 
 	async upload() {
-		/*console.log(
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '1월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-01-01T00:00:00.000Z'),
+					new Date('2022-02-01T00:00:00.000Z'),
+					'1343179746'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2월.csv',
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-02-01T00:00:00.000Z'),
-					new Date('2022-03-01T00:00:00.000Z')
+					new Date('2022-03-01T00:00:00.000Z'),
+					'65319871'
 				),
 				contentType: 'text/csv',
 			})
@@ -450,7 +487,8 @@ export class OrderFeed implements iFeed {
 				fileName: '3월.csv',
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-03-01T00:00:00.000Z'),
-					new Date('2022-04-01T00:00:00.000Z')
+					new Date('2022-04-01T00:00:00.000Z'),
+					'1595058800'
 				),
 				contentType: 'text/csv',
 			})
@@ -462,11 +500,12 @@ export class OrderFeed implements iFeed {
 				fileName: '4월.csv',
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-04-01T00:00:00.000Z'),
-					new Date('2022-05-01T00:00:00.000Z')
+					new Date('2022-05-01T00:00:00.000Z'),
+					'513874448'
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 
 		console.log(
 			await S3Client.upload({
