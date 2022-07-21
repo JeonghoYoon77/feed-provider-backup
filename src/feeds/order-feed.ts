@@ -1,13 +1,14 @@
 import {retry, sleep} from '@fetching-korea/common-utils'
-import { GoogleSpreadsheet } from 'google-spreadsheet'
-import { parse } from 'json2csv'
+import {GoogleSpreadsheet} from 'google-spreadsheet'
+import {parse} from 'json2csv'
 import {isDate, isString, parseInt} from 'lodash'
+import {DateTime} from 'luxon'
 
 import sheetData from '../../fetching-sheet.json'
 
-import { MySQL, S3Client } from '../utils'
+import {MySQL, S3Client} from '../utils'
 
-import { iFeed } from './feed'
+import {iFeed} from './feed'
 
 export class OrderFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
@@ -18,7 +19,7 @@ export class OrderFeed implements iFeed {
 		return Buffer.from(await this.getTsv({start, end, targetSheetId}), 'utf-8')
 	}
 
-	async getTsv({start, end, targetSheetId}: {start: Date, end: Date, targetSheetId?: string}): Promise<string> {
+	async getTsv({start, end, targetSheetId}: { start: Date, end: Date, targetSheetId?: string }): Promise<string> {
 		// 재무 시트
 		const doc = new GoogleSpreadsheet(
 			'1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0'
@@ -64,7 +65,7 @@ export class OrderFeed implements iFeed {
 		})
 
 		taxRaw.forEach((row) => {
-			if(row['주문번호']) {
+			if (row['주문번호']) {
 				const id = row['주문번호'].trim()
 				const value = row['금액'].replace(/,/g, '')
 				tax[id] = parseInt(value)
@@ -114,43 +115,61 @@ export class OrderFeed implements iFeed {
 		const data = await MySQL.execute(
 			`
 				SELECT fo.created_at,
-							 so.shipping_completed_at + INTERVAL 1 WEEK                    as completed_at,
-							 od.recipient_name                                             as name,
-							 od.phone_number                                               as phone,
-							 si.shop_name,
-							 GROUP_CONCAT(DISTINCT ii.item_name)                           AS itemName,
+							 COALESCE(io.ordered_at, (SELECT fom2.created_at
+																				FROM commerce.fetching_order_memo fom2
+																				WHERE so.shop_order_number = fom2.shop_order_number
+																					AND to_value = 'ORDER_COMPLETE'
+																				ORDER BY fom2.created_at DESC
+																				LIMIT 1))                                         orderedAt,
+							 so.shipping_completed_at + INTERVAL 1 WEEK                              as completedAt,
+							 od.recipient_name                                                       as name,
+							 od.phone_number                                                         as phone,
+							 GROUP_CONCAT(DISTINCT si.shop_name separator ', ')                      AS shopName,
+							 JSON_ARRAYAGG(sp.shop_country)                                          as countries,
+							 GROUP_CONCAT(DISTINCT ii.item_name)                                     AS itemName,
+							 (SELECT SUM(io.quantity)
+								FROM commerce.shop_order so2
+											 JOIN commerce.item_order io2 ON so2.shop_order_number = io2.shop_order_number
+								WHERE so2.fetching_order_number = fo.fetching_order_number
+								GROUP BY so2.fetching_order_number)                                    AS quantity,
 							 fo.fetching_order_number,
-							 GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ')  AS vendorOrderNumber,
-							 GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ') AS cardApprovalNumber,
-							 fo.pay_amount                                                 AS payAmount,
+							 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io.item_order_number, 'orderedAt',
+																								 COALESCE(io.ordered_at, (SELECT fom2.created_at
+																																					FROM commerce.fetching_order_memo fom2
+																																					WHERE so.shop_order_number = fom2.shop_order_number
+																																						AND to_value = 'ORDER_COMPLETE'
+																																					ORDER BY fom2.created_at DESC
+																																					LIMIT 1))))) AS itemOrderNumber,
+							 GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ')            AS vendorOrderNumber,
+							 GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ')           AS cardApprovalNumber,
+							 fo.pay_amount                                                           AS payAmount,
 							 (
 								 SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
 								 FROM commerce.order_additional_pay oap
 												JOIN commerce.order_additional_pay_item oapi
-														 ON oapi.order_additional_number = oap.order_additional_number AND oapi.status = 'PAID'
+														 ON oapi.order_additional_number = oap.order_additional_number AND
+																oapi.status = 'PAID'
 								 WHERE oap.fetching_order_number = fo.fetching_order_number
-							 )                                                             AS additionalPayInfo,
+							 )                                                                       AS additionalPayInfo,
 							 fo.status,
 							 fo.order_path,
 							 fo.pay_method,
-							 oc.order_cancel_number IS NOT NULL                            AS isCanceled,
-							 oe.order_exchange_number IS NOT NULL                          AS isExchanged,
-							 oret.order_return_number IS NOT NULL                          AS isReturned,
 							 (
 								 SELECT JSON_ARRAYAGG(
-																		 case
-																			 when ori2.return_item_number is not null
-																				 then '반품'
-																			 when oci2.cancel_item_number is not null
-																				 then '주문 취소'
-																			 when fo.status = 'COMPLETE'
-																				 then '구매 확정'
-																			 when so.status not in
-																						('BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED',
-																						 'ORDER_DELAY')
-																				 then '주문 완료'
-																			 else ''
-																			 end
+													case
+														when ori2.return_item_number is not null
+															then '반품'
+														when oci2.cancel_item_number is not null
+															then '주문 취소'
+														when fo.status = 'COMPLETE'
+															then '구매 확정'
+														when so.status not in
+																 ('BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING',
+																	'PRE_ORDER_REQUIRED',
+																	'ORDER_DELAY')
+															then '주문 완료'
+														else ''
+														end
 													)
 								 FROM commerce.item_order io2
 												inner join commerce.shop_order so2
@@ -164,49 +183,72 @@ export class OrderFeed implements iFeed {
 																		and io2.item_order_number = ori2.item_order_number
 								 WHERE 1 = 1
 									 AND so2.fetching_order_number = fo.fetching_order_number
-							 )                                                             as itemStatusList,
-							 ssi.customer_negligence_return_fee                            AS returnFee,
-							 oret.reason_type                                              AS returnReason,
-							 fo.status                                                     AS orderStatus,
-							 so.status                                                     AS shopStatus,
-							 io.invoice                                                    AS invoice,
+							 )                                                                       as itemStatusList,
+							 ssi.customer_negligence_return_fee                                      AS returnFee,
+							 oret.reason_type                                                        AS returnReason,
+							 fo.status                                                               AS orderStatus,
+							 so.status                                                               AS shopStatus,
+							 io.invoice                                                              AS invoice,
+							 (SELECT JSON_ARRAYAGG(opcl.data)
+								FROM commerce.order_pay_cancel_log opcl
+								WHERE opcl.fetching_order_number = fo.fetching_order_number
+									AND success)                                                         AS refundData,
+							 (SELECT JSON_ARRAYAGG(oapcl.data)
+								FROM commerce.order_additional_pay_cancel_log oapcl
+											 JOIN order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
+											 JOIN order_additional_pay oap on oapl.order_additional_number = oap.order_additional_number
+								WHERE oap.fetching_order_number = fo.fetching_order_number)            AS additonalRefundData,
 							 case
 								 when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
 									 then fo.pay_amount
 								 else oref.refund_amount
-								 end                                                         AS refundAmount,
-							 fo.pay_amount_detail                                          AS payAmountDetail,
-							 JSON_ARRAYAGG(io.pay_amount_detail)                           AS itemPayAmountDetail,
-							 COALESCE(fo.coupon_discount_amount, 0)                        AS couponDiscountAmount,
-							 COALESCE(fo.use_point, 0)                                     as pointDiscountAmount,
+								 end                                                                   AS refundAmount,
+							 fo.pay_amount_detail                                                    AS payAmountDetail,
+							 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io2.item_order_number, 'payAmount',
+																								 io2.pay_amount_detail, 'country', sp2.shop_country, 'isRefunded',
+																								 ori2.item_order_number IS NOT NULL))
+								FROM commerce.item_order io2
+											 LEFT JOIN commerce.order_refund_item ori2
+																 ON ori2.item_order_number = io2.item_order_number AND ori2.status = 'ACCEPT' AND
+																		ori2.deleted_at IS NULL
+											 JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
+											 JOIN shop_price sp2 ON so2.shop_id = sp2.idx
+								WHERE so2.fetching_order_number = fo.fetching_order_number)            AS itemPayAmountDetail,
+							 COALESCE(fo.coupon_discount_amount, 0)                                  AS couponDiscountAmount,
+							 COALESCE(fo.use_point, 0)                                               as pointDiscountAmount,
 							 exists(
 								 select 1
 								 from commerce.order_refund refund
 								 where 1 = 1
 									 and refund.status = 'ACCEPT'
 									 and refund.fetching_order_number = fo.fetching_order_number
-								 )                                                           AS taxRefunded,
-							 so.is_ddp_service                                             AS isDDP,
-							 weight                                                        as weight,
-							 dm.name                                                       AS deliveryMethodName,
-							 dm.country                                                    AS deliveryMethodCountry,
+								 )                                                                     AS taxRefunded,
+							 so.is_ddp_service                                                       AS isDDP,
+							 weight                                                                  as weight,
+							 dm.name                                                                 AS deliveryMethodName,
+							 dm.country                                                              AS deliveryMethodCountry,
 							 (SELECT u.name
 								FROM commerce.fetching_order_memo fom
 											 JOIN fetching_dev.users u ON fom.admin_id = u.idx
 								WHERE fom.fetching_order_number = fo.fetching_order_number
 								ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
-								LIMIT 1)                                                     AS assignee
+								LIMIT 1)                                                               AS assignee
 				FROM commerce.fetching_order fo
-							 LEFT JOIN commerce.order_cancel oc on fo.fetching_order_number = oc.fetching_order_number
-							 LEFT JOIN commerce.order_exchange oe on fo.fetching_order_number = oe.fetching_order_number
-							 LEFT JOIN commerce.order_return oret on fo.fetching_order_number = oret.fetching_order_number
-							 LEFT JOIN commerce.order_refund oref on fo.fetching_order_number = oref.fetching_order_number
-							 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
-							 JOIN commerce.user u on fo.user_id = u.idx
 							 JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
 							 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
+							 LEFT JOIN commerce.order_cancel_item oci on io.item_order_number = oci.item_order_number
+							 LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
+							 LEFT JOIN commerce.order_exchange_item oei on oei.item_order_number = io.item_order_number
+							 LEFT JOIN commerce.order_exchange oe on oei.order_exchange_number = oe.order_exchange_number
+							 LEFT JOIN commerce.order_return_item oreti on oreti.item_order_number = io.item_order_number
+							 LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
+							 LEFT JOIN commerce.order_refund_item orefi on orefi.item_order_number = io.item_order_number
+							 LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
+							 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
+							 JOIN commerce.user u on fo.user_id = u.idx
 							 JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
 							 LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
+							 JOIN shop_price sp on so.shop_id = sp.idx
 							 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
 							 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
 							 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
@@ -219,21 +261,51 @@ export class OrderFeed implements iFeed {
 					)
 				GROUP BY fo.fetching_order_number
 				ORDER BY fo.created_at ASC
-		`,
+      `,
 			[start, end]
 		)
 
 		const [{currencyRate}] = await MySQL.execute(`
-			SELECT currency_rate as currencyRate FROM currency_info WHERE currency_tag = 'EUR'
-		`)
+        SELECT currency_rate as currencyRate
+        FROM currency_info
+        WHERE currency_tag = 'EUR'
+    `)
 
 		const feed = data.map((row) => {
-			const refundAmount = row.refundAmount ?? 0
+			row.itemOrderNumber = row.itemOrderNumber.map(itemOrder => [itemOrder.itemOrderNumber, itemOrder.orderedAt ? `(${DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss')})` : ''].join(' ').trim()).join(', ')
+			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
+				.map(data => JSON.parse(data)).filter(data => {
+					return data?.ResultCode === '2001'
+				})
+			const refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
 			// const salesAmount = row.payAmount - refundAmount
 			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
 			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
 
 			// const profit = salesAmount - totalTotalPrice
+
+			let settleCount = 0
+			let completeCount = 0
+			let cancelCount = 0
+			let returnCount = 0
+
+			// '반품', '주문 취소', '구매 확정', '주문 완료'
+			for (const status of row.itemStatusList) {
+				if (status === '구매 확정') settleCount++
+				if (status === '주문 완료') completeCount++
+				if (status === '주문 취소') cancelCount++
+				if (status === '반품') returnCount++
+			}
+
+			let status = ''
+			if (!settleCount && !completeCount && cancelCount && !returnCount) status = '주문 취소'
+			else if (!settleCount && completeCount && !cancelCount && !returnCount) status = '주문 완료'
+			else if (settleCount && !completeCount && !cancelCount && !returnCount) status = '구매 확정'
+			else if (!settleCount && !completeCount && !cancelCount && returnCount) status = '반품'
+			else if (!settleCount && completeCount && cancelCount && !returnCount) status = '주문 완료, 일부 취소'
+			else if (settleCount && !completeCount && cancelCount && !returnCount) status = '구매 확정, 일부 취소'
+			else if (!settleCount && completeCount && !cancelCount && returnCount) status = '주문 완료, 일부 반품'
+			else if (settleCount && !completeCount && !cancelCount && returnCount) status = '구매 확정, 일부 반품'
 
 			const priceData: any = {}
 			JSON.parse(row.payAmountDetail).forEach((row) => {
@@ -246,27 +318,22 @@ export class OrderFeed implements iFeed {
 
 			const remarks = []
 
-			let pgFee = 0, refundPgFee = 0
+			let pgFee = 0
 
 			if (row.pay_method === 'CARD') {
 				pgFee = Math.round(row.payAmount * 0.014)
-				refundPgFee = Math.round(row.refundAmount * 0.014)
 			} else if (row.pay_method === 'KAKAO') {
 				pgFee = Math.round(row.payAmount * 0.015)
-				refundPgFee = Math.round(row.refundAmount * 0.015)
 			} else if (row.pay_method === 'NAVER') {
 				pgFee = Math.round(row.payAmount * 0.015)
-				refundPgFee = Math.round(row.refundAmount * 0.015)
 			} else if (row.pay_method === 'ESCROW') {
 				pgFee = Math.round(row.payAmount * 0.017)
-				refundPgFee = Math.round(row.refundAmount * 0.017)
 			} else if (row.pay_method === 'ESCROW_CARD') {
 				pgFee = Math.round(row.payAmount * 0.016)
-				refundPgFee = Math.round(row.refundAmount * 0.016)
 			}
 
 			if (row.additionalPayInfo) {
-				for (const { amount, method } of row.additionalPayInfo) {
+				for (const {amount, method} of row.additionalPayInfo) {
 					row.payAmount += amount
 					if (method === 'CARD') pgFee += Math.round(amount * 0.014)
 					else if (method === 'KAKAO') pgFee += Math.round(amount * 0.015)
@@ -277,8 +344,20 @@ export class OrderFeed implements iFeed {
 				}
 			}
 
+			const refundPgFee = refundData.reduce((a, b) => {
+				const amount = parseInt(b.CancelAmt)
+				let pgFee = 0
+				if (b.PayMethod === 'CARD') pgFee = Math.round(amount * 0.014)
+				else if (b.PayMethod === 'KAKAO') pgFee = Math.round(amount * 0.015)
+				else if (b.PayMethod === 'NAVER') pgFee = Math.round(amount * 0.015)
+				else if (b.PayMethod === 'ESCROW') pgFee = Math.round(amount * 0.017)
+				else if (b.PayMethod === 'ESCROW_CARD')
+					pgFee = Math.round(amount * 0.016)
+				return a + pgFee
+			}, 0)
+
 			const cardApprovalNumberList =
-				row.cardApprovalNumber?.split(',') ?? []
+        row.cardApprovalNumber?.split(',') ?? []
 
 			const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
 				const cardApprovalNumber = e.trim()
@@ -298,19 +377,31 @@ export class OrderFeed implements iFeed {
 			}, 0)
 
 			const itemPriceData: any = {}
-			row.itemPayAmountDetail.map((detail) =>
-				Object.values<any>(JSON.parse(detail)).forEach((data) => {
+			const itemPriceDataCanceled: any = {}
+			row.itemPayAmountDetail.map((detail) => {
+				let count = 0
+				return Object.entries<any>(JSON.parse(detail.payAmount)).forEach(([key, data]) => {
+					if (key !== detail.country && (detail.country === 'KR' ? count !== 0 : true)) return
+					count++
 					data.forEach((row) => {
 						if (itemPriceData[row.type])
 							itemPriceData[row.type] += row.rawValue
-						else itemPriceData[row.type] = row.rawValue
+						else {
+							itemPriceData[row.type] = row.rawValue
+							itemPriceDataCanceled[row.type] = 0
+						}
+						if (detail.isRefunded) {
+							if (itemPriceDataCanceled[row.type])
+								itemPriceDataCanceled[row.type] += row.rawValue
+							else itemPriceDataCanceled[row.type] = row.rawValue
+						}
 					})
 				})
-			)
+			})
 
 			if (
 				['DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'].includes(row.returnReason) ||
-        !row.isReturned
+        !returnCount
 			) {
 				row.returnFee = 0
 			}
@@ -342,6 +433,7 @@ export class OrderFeed implements iFeed {
 			}
 
 			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
+			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
 
 
 			if (row.cardApprovalNumber === '파스토') cardPurchaseValue = purchaseValue
@@ -352,37 +444,16 @@ export class OrderFeed implements iFeed {
 				waypointDeliveryFee = ((row.weight < 1 ? 3 + 3.2 + 1.5 : 3 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3)
 			}
 
-			let settleCount = 0
-			let completeCount = 0
-			let cancelCount = 0
-			let returnCount = 0
-
-			// '반품', '주문 취소', '구매 확정', '주문 완료'
-			for (const status of row.itemStatusList) {
-				if (status === '구매 확정') settleCount++
-				if (status === '주문 완료') completeCount++
-				if (status === '주문 취소') cancelCount++
-				if (status === '반품') returnCount++
-			}
-
-			let status = ''
-			if (!settleCount && !completeCount && cancelCount && !returnCount) status = '주문 취소'
-			else if (!settleCount && completeCount && !cancelCount && !returnCount) status = '주문 완료'
-			else if (settleCount && !completeCount && !cancelCount && !returnCount) status = '구매 확정'
-			else if (!settleCount && !completeCount && !cancelCount && returnCount) status = '반품'
-			else if (!settleCount && completeCount && cancelCount && !returnCount) status = '주문 완료, 일부 취소'
-			else if (settleCount && !completeCount && cancelCount && !returnCount) status = '구매 확정, 일부 취소'
-			else if (!settleCount && completeCount && !cancelCount && returnCount) status = '주문 완료, 일부 반품'
-			else if (settleCount && !completeCount && !cancelCount && returnCount) status = '구매 확정, 일부 반품'
-
 			const data = {
-				주문일: row.created_at,
+				주문일: DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
 				상태: status,
 				'배송 유형': `${row.deliveryMethodName} ${row.deliveryMethodCountry}`,
-				구매확정일: row.completed_at,
-				편집샵명: row.shop_name,
+				구매확정일: row.completedAt,
+				편집샵명: row.shopName,
 				상품명: row.itemName,
+				수량: row.quantity,
 				주문번호: row.fetching_order_number,
+				'상품별 주문번호': row.itemOrderNumber,
 				'편집샵 주문번호': row.vendorOrderNumber,
 				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
 				'결제 방식': row.pay_method,
@@ -403,7 +474,7 @@ export class OrderFeed implements iFeed {
 				'PG수수료 환불': refundPgFee,
 				'예상 매입 금액': purchaseValue,
 				'실 매입 금액': cardPurchaseValue,
-				'예상 매입환출금': (row.isCanceled || row.isReturned) && row.vendorOrderNumber ? -cardPurchaseValue : 0,
+				'예상 매입환출금': (cancelCount || returnCount) && row.vendorOrderNumber ? (completeCount && settleCount) ? lCardRefundValue : -cardPurchaseValue : 0,
 				'실 매입환출금액': -cardRefundValue,
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
@@ -423,8 +494,8 @@ export class OrderFeed implements iFeed {
 				if (rows[i]) {
 					let isModified = false
 					for (const key of Object.keys(feed[i])) {
-						if (!feed[i][key]) continue
-						if (['실 배대지 비용'].includes(key)) continue
+						if (!feed[i][key] && !['예상 배대지 비용'].includes(key)) continue
+						if (rows[i][key] && ['실 배대지 비용'].includes(key)) continue
 						if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 						if ((parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
@@ -462,11 +533,13 @@ export class OrderFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-01-01T00:00:00.000Z'),
 					new Date('2022-02-01T00:00:00.000Z'),
-					'1343179746'
+					//'1343179746'
 				),
 				contentType: 'text/csv',
 			})
 		)
+
+		return
 
 		console.log(
 			await S3Client.upload({
