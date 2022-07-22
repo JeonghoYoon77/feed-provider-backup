@@ -194,9 +194,10 @@ export class OrderFeed implements iFeed {
 									AND success)                                                         AS refundData,
 							 (SELECT JSON_ARRAYAGG(oapcl.data)
 								FROM commerce.order_additional_pay_cancel_log oapcl
-											 JOIN order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
-											 JOIN order_additional_pay oap on oapl.order_additional_number = oap.order_additional_number
-								WHERE oap.fetching_order_number = fo.fetching_order_number)            AS additonalRefundData,
+											 JOIN commerce.order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
+								    JOIN commerce.order_additional_pay_item oapi ON oapi.additional_item_number = oapl.additional_item_number
+											 JOIN commerce.order_additional_pay oap on oap.order_additional_number = oapi.order_additional_number
+								WHERE oap.fetching_order_number = fo.fetching_order_number)            AS additionalRefundData,
 							 case
 								 when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
 									 then fo.pay_amount
@@ -275,6 +276,9 @@ export class OrderFeed implements iFeed {
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001'
 				})
+			if (row.fetching_order_number === '20220206-0000021') {
+				console.log(row.refundData, row.additionalRefundData)
+			}
 			const refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
 			// const salesAmount = row.payAmount - refundAmount
 			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
@@ -501,10 +505,11 @@ export class OrderFeed implements iFeed {
 						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 						if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
-						const cell = targetSheet.getCellByA1(`${this.columnToLetter(targetSheet.headerValues.indexOf(key) + 1)}${rows[i].rowIndex}`)
+						const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
 						const {red, green, blue} = cell.effectiveFormat.backgroundColor
 						if (!(red === 1 && green === 1 && blue === 1)) continue
 						if (cell.effectiveFormat.numberFormat?.type.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
+
 						cell.value = feed[i][key]
 						hasModified = true
 					}
@@ -530,7 +535,7 @@ export class OrderFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '1월.csv',
@@ -541,8 +546,8 @@ export class OrderFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
-		return
+		)*/
+
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
@@ -555,7 +560,7 @@ export class OrderFeed implements iFeed {
 				contentType: 'text/csv',
 			})
 		)
-
+		return
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
@@ -620,16 +625,5 @@ export class OrderFeed implements iFeed {
 				contentType: 'text/csv',
 			})
 		)
-	}
-
-	columnToLetter(column) {
-		let temp, letter = ''
-		while (column > 0)
-		{
-			temp = (column - 1) % 26
-			letter = String.fromCharCode(temp + 65) + letter
-			column = (column - temp - 1) / 26
-		}
-		return letter
 	}
 }
