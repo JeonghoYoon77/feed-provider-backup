@@ -124,8 +124,7 @@ export class OrderFeed implements iFeed {
 							 so.shipping_completed_at + INTERVAL 1 WEEK                              as completedAt,
 							 od.recipient_name                                                       as name,
 							 od.phone_number                                                         as phone,
-							 GROUP_CONCAT(DISTINCT si.shop_name separator ', ')                      AS shopName,
-							 JSON_ARRAYAGG(sp.shop_country)                                          as countries,
+							 JSON_ARRAYAGG(CONCAT(si.shop_name, ' ', sp.shop_country))                    AS shopName,
 							 GROUP_CONCAT(DISTINCT ii.item_name)                                     AS itemName,
 							 (SELECT SUM(io.quantity)
 								FROM commerce.shop_order so2
@@ -224,9 +223,8 @@ export class OrderFeed implements iFeed {
 									 and refund.fetching_order_number = fo.fetching_order_number
 								 )                                                                     AS taxRefunded,
 							 so.is_ddp_service                                                       AS isDDP,
-							 weight                                                                  as weight,
-							 dm.name                                                                 AS deliveryMethodName,
-							 dm.country                                                              AS deliveryMethodCountry,
+							 weight                                                                  AS weight,
+							 JSON_ARRAYAGG(CONCAT(dm.name, ' ', dm.country))                         AS deliveryMethod,
 							 (SELECT u.name
 								FROM commerce.fetching_order_memo fom
 											 JOIN fetching_dev.users u ON fom.admin_id = u.idx
@@ -250,7 +248,7 @@ export class OrderFeed implements iFeed {
 							 LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
 							 JOIN shop_price sp on so.shop_id = sp.idx
 							 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
-							 JOIN fetching_dev.shop_info si ON ii.shop_id = si.shop_id
+							 JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
 							 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
 				WHERE fo.paid_at IS NOT NULL
 					AND fo.deleted_at IS NULL
@@ -426,15 +424,15 @@ export class OrderFeed implements iFeed {
 			}
 
 			const taxTotal = tax[row.fetching_order_number] || 0
-			let taxRefund = 0
+			let taxRefund: any = 0
 
 			if (row.taxRefunded == 1) {
 				taxRefund = taxTotal
+				if (status.includes('일부')) taxRefund = '수동 확인 필요'
 			}
 
 			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
-
 
 			if (row.cardApprovalNumber === '파스토') cardPurchaseValue = purchaseValue
 
@@ -447,9 +445,8 @@ export class OrderFeed implements iFeed {
 			const data = {
 				주문일: DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
 				상태: status,
-				'배송 유형': `${row.deliveryMethodName} ${row.deliveryMethodCountry}`,
-				구매확정일: row.completedAt,
-				편집샵명: row.shopName,
+				'배송 유형': [...new Set(row.deliveryMethod)].join(', '),
+				구매확정일: row.completedAt ? DateTime.fromISO(row.completedAt.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss') : null,
 				상품명: row.itemName,
 				수량: row.quantity,
 				주문번호: row.fetching_order_number,
@@ -496,9 +493,10 @@ export class OrderFeed implements iFeed {
 					for (const key of Object.keys(feed[i])) {
 						if (!feed[i][key] && !['예상 배대지 비용'].includes(key)) continue
 						if (rows[i][key] && ['실 배대지 비용'].includes(key)) continue
+						if (rows[i][key] && ['수동 확인 필요'].includes(feed[i][key])) continue
 						if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
-						if ((parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
+						if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
 						rows[i][key] = feed[i][key]
 						isModified = true
@@ -533,7 +531,7 @@ export class OrderFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-01-01T00:00:00.000Z'),
 					new Date('2022-02-01T00:00:00.000Z'),
-					//'1343179746'
+					'1343179746'
 				),
 				contentType: 'text/csv',
 			})
