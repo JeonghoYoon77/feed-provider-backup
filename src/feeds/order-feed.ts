@@ -493,7 +493,6 @@ export class OrderFeed implements iFeed {
 			let hasModified = false
 			for (const i in feed) {
 				if (rows[i]) {
-					let isModified = false
 					for (const key of Object.keys(feed[i])) {
 						if (!feed[i][key] && !['예상 배대지 비용'].includes(key)) continue
 						if (rows[i][key] && ['실 배대지 비용'].includes(key)) continue
@@ -503,18 +502,13 @@ export class OrderFeed implements iFeed {
 						if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
 						const cell = targetSheet.getCellByA1(`${this.columnToLetter(targetSheet.headerValues.indexOf(key) + 1)}${rows[i].rowIndex}`)
+						const {red, green, blue} = cell.effectiveFormat.backgroundColor
+						if (!(red === 1 && green === 1 && blue === 1)) continue
 						if (cell.effectiveFormat.numberFormat?.type.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 						cell.value = feed[i][key]
 						hasModified = true
 					}
 				} else {
-					if (hasModified) {
-						hasModified = false
-						await retry(3, 3000)(async () => {
-							await targetSheet.saveUpdatedCells()
-						})
-						await sleep(500)
-					}
 					await retry(3, 3000)(async () => {
 						await targetSheet.addRow(feed[i], {raw: true, insert: true})
 					})
@@ -543,14 +537,12 @@ export class OrderFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-01-01T00:00:00.000Z'),
 					new Date('2022-02-01T00:00:00.000Z'),
-					'1343179746'
+					'1211460681'
 				),
 				contentType: 'text/csv',
 			})
 		)
-
 		return
-
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
