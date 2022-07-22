@@ -447,6 +447,7 @@ export class OrderFeed implements iFeed {
 				상태: status,
 				'배송 유형': [...new Set(row.deliveryMethod)].join(', '),
 				구매확정일: row.completedAt ? DateTime.fromISO(row.completedAt.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss') : null,
+				편집샵명: [...new Set(row.shopName)].join(', '),
 				상품명: row.itemName,
 				수량: row.quantity,
 				주문번호: row.fetching_order_number,
@@ -487,6 +488,9 @@ export class OrderFeed implements iFeed {
 		if (targetSheetId) {
 			let targetSheet = doc.sheetsById[targetSheetId]
 			const rows = await targetSheet.getRows()
+			// @ts-ignore
+			await targetSheet.loadCells()
+			let hasModified = false
 			for (const i in feed) {
 				if (rows[i]) {
 					let isModified = false
@@ -498,21 +502,29 @@ export class OrderFeed implements iFeed {
 						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 						if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
-						rows[i][key] = feed[i][key]
-						isModified = true
+						const cell = targetSheet.getCellByA1(`${this.columnToLetter(targetSheet.headerValues.indexOf(key) + 1)}${rows[i].rowIndex}`)
+						if (cell.effectiveFormat.numberFormat?.type.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
+						cell.value = feed[i][key]
+						hasModified = true
 					}
-					if (isModified) {
+				} else {
+					if (hasModified) {
+						hasModified = false
 						await retry(3, 3000)(async () => {
-							await rows[i].save()
+							await targetSheet.saveUpdatedCells()
 						})
 						await sleep(500)
 					}
-				} else {
 					await retry(3, 3000)(async () => {
-						await targetSheet.addRow(feed[i])
+						await targetSheet.addRow(feed[i], {raw: true, insert: true})
 					})
 					await sleep(500)
 				}
+			}
+			if (hasModified) {
+				await retry(3, 3000)(async () => {
+					await targetSheet.saveUpdatedCells()
+				})
 			}
 		}
 
@@ -616,5 +628,16 @@ export class OrderFeed implements iFeed {
 				contentType: 'text/csv',
 			})
 		)
+	}
+
+	columnToLetter(column) {
+		let temp, letter = ''
+		while (column > 0)
+		{
+			temp = (column - 1) % 26
+			letter = String.fromCharCode(temp + 65) + letter
+			column = (column - temp - 1) / 26
+		}
+		return letter
 	}
 }
