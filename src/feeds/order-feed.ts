@@ -1,7 +1,7 @@
-import {retry, sleep} from '@fetching-korea/common-utils'
+import {Calculate, retry, sleep} from '@fetching-korea/common-utils'
 import {GoogleSpreadsheet} from 'google-spreadsheet'
 import {parse} from 'json2csv'
-import {isDate, isString, parseInt} from 'lodash'
+import {isDate, isNil, isString, parseInt} from 'lodash'
 import {DateTime} from 'luxon'
 
 import sheetData from '../../fetching-sheet.json'
@@ -114,152 +114,172 @@ export class OrderFeed implements iFeed {
 
 		const data = await MySQL.execute(
 			`
-				SELECT fo.created_at,
-							 COALESCE(io.ordered_at, (SELECT fom2.created_at
-																				FROM commerce.fetching_order_memo fom2
-																				WHERE so.shop_order_number = fom2.shop_order_number
-																					AND to_value = 'ORDER_COMPLETE'
-																				ORDER BY fom2.created_at DESC
-																				LIMIT 1))                                         orderedAt,
-							 so.shipping_completed_at + INTERVAL 1 WEEK                              as completedAt,
-							 od.recipient_name                                                       as name,
-							 od.phone_number                                                         as phone,
-							 JSON_ARRAYAGG(CONCAT(si.shop_name, ' ', sp.shop_country))                    AS shopName,
-							 GROUP_CONCAT(DISTINCT ii.item_name)                                     AS itemName,
-							 (SELECT SUM(io.quantity)
-								FROM commerce.shop_order so2
-											 JOIN commerce.item_order io2 ON so2.shop_order_number = io2.shop_order_number
-								WHERE so2.fetching_order_number = fo.fetching_order_number
-								GROUP BY so2.fetching_order_number)                                    AS quantity,
-							 fo.fetching_order_number,
-							 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io.item_order_number, 'orderedAt',
-																								 COALESCE(io.ordered_at, (SELECT fom2.created_at
-																																					FROM commerce.fetching_order_memo fom2
-																																					WHERE so.shop_order_number = fom2.shop_order_number
-																																						AND to_value = 'ORDER_COMPLETE'
-																																					ORDER BY fom2.created_at DESC
-																																					LIMIT 1))))) AS itemOrderNumber,
-							 GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ')            AS vendorOrderNumber,
-							 GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ')           AS cardApprovalNumber,
-							 fo.pay_amount                                                           AS payAmount,
-							 (
-								 SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
-								 FROM commerce.order_additional_pay oap
-												JOIN commerce.order_additional_pay_item oapi
-														 ON oapi.order_additional_number = oap.order_additional_number AND
-																oapi.status = 'PAID'
-								 WHERE oap.fetching_order_number = fo.fetching_order_number
-							 )                                                                       AS additionalPayInfo,
-							 fo.status,
-							 fo.order_path,
-							 fo.pay_method,
-							 (
-								 SELECT JSON_ARRAYAGG(
-													case
-														when ori2.return_item_number is not null
-															then '반품'
-														when oci2.cancel_item_number is not null
-															then '주문 취소'
-														when fo.status = 'COMPLETE'
-															then '구매 확정'
-														when so.status not in
-																 ('BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING',
-																	'PRE_ORDER_REQUIRED',
-																	'ORDER_DELAY')
-															then '주문 완료'
-														else ''
-														end
-													)
-								 FROM commerce.item_order io2
-												inner join commerce.shop_order so2
-																	 on 1 = 1
-																		 and so2.shop_order_number = io2.shop_order_number
-												left join commerce.order_cancel_item oci2
-																	on 1 = 1
-																		and io2.item_order_number = oci2.item_order_number
-												left join commerce.order_return_item ori2
-																	on 1 = 1
-																		and io2.item_order_number = ori2.item_order_number
-								 WHERE 1 = 1
-									 AND so2.fetching_order_number = fo.fetching_order_number
-							 )                                                                       as itemStatusList,
-							 ssi.customer_negligence_return_fee                                      AS returnFee,
-							 oret.reason_type                                                        AS returnReason,
-							 fo.status                                                               AS orderStatus,
-							 so.status                                                               AS shopStatus,
-							 io.invoice                                                              AS invoice,
-							 (SELECT JSON_ARRAYAGG(opcl.data)
-								FROM commerce.order_pay_cancel_log opcl
-								WHERE opcl.fetching_order_number = fo.fetching_order_number
-									AND success)                                                         AS refundData,
-							 (SELECT JSON_ARRAYAGG(oapcl.data)
-								FROM commerce.order_additional_pay_cancel_log oapcl
-											 JOIN commerce.order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
-								    JOIN commerce.order_additional_pay_item oapi ON oapi.additional_item_number = oapl.additional_item_number
-											 JOIN commerce.order_additional_pay oap on oap.order_additional_number = oapi.order_additional_number
-								WHERE oap.fetching_order_number = fo.fetching_order_number)            AS additionalRefundData,
-							 case
-								 when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
-									 then fo.pay_amount
-								 else oref.refund_amount
-								 end                                                                   AS refundAmount,
-							 fo.pay_amount_detail                                                    AS payAmountDetail,
-							 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io2.item_order_number, 'payAmount',
-																								 io2.pay_amount_detail, 'country', sp2.shop_country, 'isRefunded',
-																								 ori2.item_order_number IS NOT NULL))
-								FROM commerce.item_order io2
-											 LEFT JOIN commerce.order_refund_item ori2
-																 ON ori2.item_order_number = io2.item_order_number AND ori2.status = 'ACCEPT' AND
-																		ori2.deleted_at IS NULL
-											 JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
-											 JOIN shop_price sp2 ON so2.shop_id = sp2.idx
-								WHERE so2.fetching_order_number = fo.fetching_order_number)            AS itemPayAmountDetail,
-							 COALESCE(fo.coupon_discount_amount, 0)                                  AS couponDiscountAmount,
-							 COALESCE(fo.use_point, 0)                                               as pointDiscountAmount,
-							 exists(
-								 select 1
-								 from commerce.order_refund refund
-								 where 1 = 1
-									 and refund.status = 'ACCEPT'
-									 and refund.fetching_order_number = fo.fetching_order_number
-								 )                                                                     AS taxRefunded,
-							 so.is_ddp_service                                                       AS isDDP,
-							 weight                                                                  AS weight,
-							 JSON_ARRAYAGG(CONCAT(dm.name, ' ', dm.country))                         AS deliveryMethod,
-							 (SELECT u.name
-								FROM commerce.fetching_order_memo fom
-											 JOIN fetching_dev.users u ON fom.admin_id = u.idx
-								WHERE fom.fetching_order_number = fo.fetching_order_number
-								ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
-								LIMIT 1)                                                               AS assignee
-				FROM commerce.fetching_order fo
-							 JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
-							 JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
-							 LEFT JOIN commerce.order_cancel_item oci on io.item_order_number = oci.item_order_number
-							 LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
-							 LEFT JOIN commerce.order_exchange_item oei on oei.item_order_number = io.item_order_number
-							 LEFT JOIN commerce.order_exchange oe on oei.order_exchange_number = oe.order_exchange_number
-							 LEFT JOIN commerce.order_return_item oreti on oreti.item_order_number = io.item_order_number
-							 LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
-							 LEFT JOIN commerce.order_refund_item orefi on orefi.item_order_number = io.item_order_number
-							 LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
-							 LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
-							 JOIN commerce.user u on fo.user_id = u.idx
-							 JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
-							 LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
-							 JOIN shop_price sp on so.shop_id = sp.idx
-							 JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
-							 JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
-							 LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
-				WHERE fo.paid_at IS NOT NULL
-					AND fo.deleted_at IS NULL
-					AND (
-							(fo.created_at + INTERVAL 9 HOUR) >= ?
-						AND
-							(fo.created_at + INTERVAL 9 HOUR) < ?
-					)
-				GROUP BY fo.fetching_order_number
-				ORDER BY fo.created_at ASC
+          SELECT fo.created_at,
+                 COALESCE(io.ordered_at, (SELECT fom2.created_at
+                                          FROM commerce.fetching_order_memo fom2
+                                          WHERE so.shop_order_number = fom2.shop_order_number
+                                            AND to_value = 'ORDER_COMPLETE'
+                                          ORDER BY fom2.created_at DESC
+                                          LIMIT 1))                                         orderedAt,
+                 so.shipping_completed_at + INTERVAL 1 WEEK                              as completedAt,
+                 od.recipient_name                                                       as name,
+                 od.phone_number                                                         as phone,
+                 JSON_ARRAYAGG(CONCAT(si.shop_name, ' ', sp.shop_country))                    AS shopName,
+                 GROUP_CONCAT(DISTINCT ii.item_name)                                     AS itemName,
+                 (SELECT SUM(io.quantity)
+                  FROM commerce.shop_order so2
+                           JOIN commerce.item_order io2 ON so2.shop_order_number = io2.shop_order_number
+                  WHERE so2.fetching_order_number = fo.fetching_order_number
+                  GROUP BY so2.fetching_order_number)                                    AS quantity,
+                 fo.fetching_order_number,
+                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io.item_order_number, 'orderedAt',
+                                                   COALESCE(io.ordered_at, (SELECT fom2.created_at
+                                                                            FROM commerce.fetching_order_memo fom2
+                                                                            WHERE so.shop_order_number = fom2.shop_order_number
+                                                                              AND to_value = 'ORDER_COMPLETE'
+                                                                            ORDER BY fom2.created_at DESC
+                                                                            LIMIT 1))))) AS itemOrderNumber,
+                 GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ')            AS vendorOrderNumber,
+                 GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ')           AS cardApprovalNumber,
+                 fo.pay_amount                                                           AS payAmount,
+                 (
+                     SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
+                     FROM commerce.order_additional_pay oap
+                              JOIN commerce.order_additional_pay_item oapi
+                                   ON oapi.order_additional_number = oap.order_additional_number AND
+                                      oapi.status = 'PAID'
+                     WHERE oap.fetching_order_number = fo.fetching_order_number
+                 )                                                                       AS additionalPayInfo,
+                 fo.status,
+                 fo.order_path,
+                 fo.pay_method,
+                 (
+                     SELECT JSON_ARRAYAGG(
+                                    case
+                                        when ori2.return_item_number is not null
+                                            then '반품'
+                                        when oci2.cancel_item_number is not null
+                                            then '주문 취소'
+                                        when fo.status = 'COMPLETE'
+                                            then '구매 확정'
+                                        when so.status not in
+                                             ('BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING',
+                                              'PRE_ORDER_REQUIRED',
+                                              'ORDER_DELAY')
+                                            then '주문 완료'
+                                        else ''
+                                        end
+                                )
+                     FROM commerce.item_order io2
+                              inner join commerce.shop_order so2
+                                         on 1 = 1
+                                             and so2.shop_order_number = io2.shop_order_number
+                              left join commerce.order_cancel_item oci2
+                                        on 1 = 1
+                                            and io2.item_order_number = oci2.item_order_number AND oci2.status = 'ACCEPT'
+                              left join commerce.order_return_item ori2
+                                        on 1 = 1
+                                            and io2.item_order_number = ori2.item_order_number AND ori2.status = 'ACCEPT'
+                     WHERE 1 = 1
+                       AND so2.fetching_order_number = fo.fetching_order_number
+                 )                                                                       as itemStatusList,
+                 ssi.customer_negligence_return_fee                                      AS returnFee,
+                 oret.reason_type                                                        AS returnReason,
+                 fo.status                                                               AS orderStatus,
+                 so.status                                                               AS shopStatus,
+                 JSON_ARRAYAGG(io.invoice)                                               AS invoice,
+                 (SELECT JSON_ARRAYAGG(opcl.data)
+                  FROM commerce.order_pay_cancel_log opcl
+                  WHERE opcl.fetching_order_number = fo.fetching_order_number
+                    AND success)                                                         AS refundData,
+                 (SELECT JSON_ARRAYAGG(oapcl.data)
+                  FROM commerce.order_additional_pay_cancel_log oapcl
+                           JOIN commerce.order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
+                           JOIN commerce.order_additional_pay_item oapi ON oapi.additional_item_number = oapl.additional_item_number
+                           JOIN commerce.order_additional_pay oap on oap.order_additional_number = oapi.order_additional_number
+                  WHERE oap.fetching_order_number = fo.fetching_order_number)            AS additionalRefundData,
+                 case
+                     when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
+                         then fo.pay_amount
+                     else oref.refund_amount
+                     end                                                                   AS refundAmount,
+                 fo.pay_amount_detail                                                    AS payAmountDetail,
+                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io2.item_order_number,
+                                                   'payAmount', io2.pay_amount_detail,
+                                                   'country', sp2.shop_country,
+                                                   'isRefunded', ori2.item_order_number IS NOT NULL,
+                                                   'vatDeductionRate', IF(dm2.vat_deduct && sp2.is_vat_deduction_available, sp2.vat_deduction_rate, 0),
+                                                   'waypointFeeType', dm2.fee_type,
+                                                   'waypointFeeWithDeduction', dm2.fee_with_deduction,
+                                                   'waypointFeeWithoutDeduction', dm2.fee_without_deduction,
+                                                   'minimumWaypointFeeWithDeduction', dm2.minimum_fee_with_deduction,
+                                                   'minimumWaypointFeeWithoutDeduction', dm2.minimum_fee_without_deduction
+                     ))
+                  FROM commerce.item_order io2
+                           LEFT JOIN commerce.order_refund_item ori2
+                                     ON ori2.item_order_number = io2.item_order_number AND ori2.status = 'ACCEPT' AND
+                                        ori2.deleted_at IS NULL
+                           JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
+                           JOIN shop_price sp2 ON so2.shop_id = sp2.idx
+                           JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
+                  WHERE so2.fetching_order_number = fo.fetching_order_number)            AS itemPayAmountDetail,
+                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io2.item_order_number, 'payAmount',
+                                                   io2.pay_amount_detail, 'country', sp2.shop_country, 'isRefunded',
+                                                   ori2.item_order_number IS NOT NULL))
+                  FROM commerce.item_order io2
+                           LEFT JOIN commerce.order_refund_item ori2
+                                     ON ori2.item_order_number = io2.item_order_number AND ori2.status = 'ACCEPT' AND
+                                        ori2.deleted_at IS NULL
+                           JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
+                           JOIN shop_price sp2 ON so2.shop_id = sp2.idx
+                  WHERE so2.fetching_order_number = fo.fetching_order_number
+                    AND sp2.delivery_method=5)                                           AS fasstoItemPayAmountDetail,
+                 COALESCE(fo.coupon_discount_amount, 0)                                  AS couponDiscountAmount,
+                 COALESCE(fo.use_point, 0)                                               as pointDiscountAmount,
+                 exists(
+                         select 1
+                         from commerce.order_refund refund
+                         where 1 = 1
+                           and refund.status = 'ACCEPT'
+                           and refund.fetching_order_number = fo.fetching_order_number
+                     )                                                                     AS taxRefunded,
+                 so.is_ddp_service                                                       AS isDDP,
+                 weight                                                                  AS weight,
+                 JSON_ARRAYAGG(CONCAT(dm.name, ' ', dm.country))                         AS deliveryMethod,
+                 (SELECT u.name
+                  FROM commerce.fetching_order_memo fom
+                           JOIN fetching_dev.users u ON fom.admin_id = u.idx
+                  WHERE fom.fetching_order_number = fo.fetching_order_number AND fom.to_value = 'ORDER_COMPLETE'
+                  ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
+                  LIMIT 1)                                                               AS assignee
+          FROM commerce.fetching_order fo
+                   JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
+                   JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
+                   LEFT JOIN commerce.order_cancel_item oci on io.item_order_number = oci.item_order_number
+                   LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
+                   LEFT JOIN commerce.order_exchange_item oei on oei.item_order_number = io.item_order_number
+                   LEFT JOIN commerce.order_exchange oe on oei.order_exchange_number = oe.order_exchange_number
+                   LEFT JOIN commerce.order_return_item oreti on oreti.item_order_number = io.item_order_number
+                   LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
+                   LEFT JOIN commerce.order_refund_item orefi on orefi.item_order_number = io.item_order_number
+                   LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
+                   LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
+                   JOIN commerce.user u on fo.user_id = u.idx
+                   JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
+                   LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
+                   JOIN shop_price sp on so.shop_id = sp.idx
+                   JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
+                   JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
+                   LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
+          WHERE fo.paid_at IS NOT NULL
+            AND fo.deleted_at IS NULL
+            AND (
+                      (fo.created_at + INTERVAL 9 HOUR) >= ?
+                  AND
+                      (fo.created_at + INTERVAL 9 HOUR) < ?
+              )
+          GROUP BY fo.fetching_order_number
+          ORDER BY fo.created_at ASC
       `,
 			[start, end]
 		)
@@ -276,9 +296,7 @@ export class OrderFeed implements iFeed {
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001'
 				})
-			if (row.fetching_order_number === '20220206-0000021') {
-				console.log(row.refundData, row.additionalRefundData)
-			}
+
 			const refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
 			// const salesAmount = row.payAmount - refundAmount
 			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
@@ -381,16 +399,25 @@ export class OrderFeed implements iFeed {
 			const itemPriceData: any = {}
 			const itemPriceDataCanceled: any = {}
 			row.itemPayAmountDetail.map((detail) => {
+				let fetchingOrderNumber = row.fetching_order_number
+				const currentItemPriceData: any = {}
 				let count = 0
-				return Object.entries<any>(JSON.parse(detail.payAmount)).forEach(([key, data]) => {
+				Object.entries<any>(JSON.parse(detail.payAmount)).forEach(([key, data]) => {
 					if (key !== detail.country && (detail.country === 'KR' ? count !== 0 : true)) return
 					count++
 					data.forEach((row) => {
-						if (itemPriceData[row.type])
+						if (itemPriceData[row.type]) {
 							itemPriceData[row.type] += row.rawValue
+						}
 						else {
 							itemPriceData[row.type] = row.rawValue
 							itemPriceDataCanceled[row.type] = 0
+						}
+						if (currentItemPriceData[row.type]) {
+							currentItemPriceData[row.type] += row.rawValue
+						}
+						else {
+							currentItemPriceData[row.type] = row.rawValue
 						}
 						if (detail.isRefunded) {
 							if (itemPriceDataCanceled[row.type])
@@ -399,6 +426,41 @@ export class OrderFeed implements iFeed {
 						}
 					})
 				})
+
+				let deductedVat
+				if (isNil(currentItemPriceData['DEDUCTED_VAT'])) {
+					const fasstoPurchaseAmount = currentItemPriceData['SHOP_PRICE_KOR'] + currentItemPriceData['DELIVERY_FEE']
+					deductedVat = Calculate.cut(fasstoPurchaseAmount - fasstoPurchaseAmount / (1 + detail.vatDeductionRate))
+					currentItemPriceData['DEDUCTED_VAT'] = deductedVat
+					if (itemPriceData['DEDUCTED_VAT'])
+						itemPriceData['DEDUCTED_VAT'] = deductedVat
+					else itemPriceData['DEDUCTED_VAT'] = deductedVat
+				}
+
+				if (isNil(currentItemPriceData['WAYPOINT_FEE'])) {
+					let waypointFee = 0
+					const waypointCurrencyRate = currentItemPriceData['SHOP_PRICE_KOR'] / currentItemPriceData['SHOP_PRICE']
+
+					switch (detail.waypointFeeType) {
+					case 'PERCENT':
+						waypointFee = Calculate.cut((currentItemPriceData['SHOP_PRICE_KOR'] - deductedVat) * (deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction))
+						break
+					case 'FIXED':
+						waypointFee = Calculate.cut((deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction) * waypointCurrencyRate)
+						break
+					}
+
+					if (deductedVat && detail.waypointMinimumFeeWithDeduction * waypointCurrencyRate > waypointFee) {
+						waypointFee = detail.waypointMinimumFeeWithDeduction * waypointCurrencyRate
+					} else if (!deductedVat && detail.waypointMinimumFeeWithoutDeduction * waypointCurrencyRate > waypointFee) {
+						waypointFee = detail.waypointMinimumFeeWithDeduction * waypointCurrencyRate
+					}
+
+					currentItemPriceData['WAYPOINT_FEE'] = waypointFee
+					if (itemPriceData['WAYPOINT_FEE'])
+						itemPriceData['WAYPOINT_FEE'] = waypointFee
+					else itemPriceData['WAYPOINT_FEE'] = waypointFee
+				}
 			})
 
 			if (
@@ -435,8 +497,8 @@ export class OrderFeed implements iFeed {
 				if (status.includes('일부')) taxRefund = '수동 확인 필요'
 			}
 
-			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
-			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
+			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] - itemPriceData['DEDUCTED_VAT'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
+			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
 
 			if (row.cardApprovalNumber === '파스토') cardPurchaseValue = purchaseValue
 
@@ -467,7 +529,7 @@ export class OrderFeed implements iFeed {
 				결제가: row.payAmount,
 				환불금액: refundAmount,
 				'PG수수료': pgFee,
-				'운송장번호': row.invoice,
+				'운송장번호': [...new Set(row.invoice)].join(','),
 				'예상 배대지 비용': itemPriceData['ADDITIONAL_FEE'] || 0,
 				'실 배대지 비용': waypointDeliveryFee,
 				'예상 관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']),
@@ -476,7 +538,7 @@ export class OrderFeed implements iFeed {
 				'PG수수료 환불': refundPgFee,
 				'예상 매입 금액': purchaseValue,
 				'실 매입 금액': cardPurchaseValue,
-				'예상 매입환출금': (cancelCount || returnCount) && row.vendorOrderNumber ? (completeCount && settleCount) ? lCardRefundValue : -cardPurchaseValue : 0,
+				'예상 매입환출금': (cancelCount || returnCount) && row.vendorOrderNumber ? (completeCount && settleCount) ? Math.abs(lCardRefundValue) : Math.abs(cardPurchaseValue) : 0,
 				'실 매입환출금액': -cardRefundValue,
 				반품수수료: row.returnFee || 0,
 				비고: remarks.join(', '),
@@ -498,17 +560,20 @@ export class OrderFeed implements iFeed {
 			for (const i in feed) {
 				if (rows[i]) {
 					for (const key of Object.keys(feed[i])) {
-						if (!feed[i][key] && !['예상 배대지 비용'].includes(key)) continue
-						if (rows[i][key] && ['실 배대지 비용'].includes(key)) continue
-						if (rows[i][key] && ['수동 확인 필요'].includes(feed[i][key])) continue
+						if (['예상 배대지 비용'].includes(key)) continue
+						if (['실 배대지 비용'].includes(key)) continue
+						if (['수동 확인 필요'].includes(feed[i][key])) continue
 						if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 						if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
 						const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
-						const {red, green, blue} = cell.effectiveFormat.backgroundColor
-						if (!(red === 1 && green === 1 && blue === 1)) continue
-						if (cell.effectiveFormat.numberFormat?.type.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
+
+						if (cell?.effectiveFormat?.backgroundColor) {
+							const {red, green, blue} = cell.effectiveFormat.backgroundColor
+							if (!(red === 1 && green === 1 && blue === 1)) continue
+						}
+						if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
 						cell.value = feed[i][key]
 						hasModified = true
@@ -535,18 +600,18 @@ export class OrderFeed implements iFeed {
 	}
 
 	async upload() {
-		/*console.log(
+		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '1월.csv',
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-01-01T00:00:00.000Z'),
 					new Date('2022-02-01T00:00:00.000Z'),
-					'1211460681'
+					'1343179746'
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 
 		console.log(
 			await S3Client.upload({
@@ -560,7 +625,7 @@ export class OrderFeed implements iFeed {
 				contentType: 'text/csv',
 			})
 		)
-		return
+
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
