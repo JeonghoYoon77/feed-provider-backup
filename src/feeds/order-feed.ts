@@ -399,7 +399,6 @@ export class OrderFeed implements iFeed {
 			const itemPriceData: any = {}
 			const itemPriceDataCanceled: any = {}
 			row.itemPayAmountDetail.map((detail) => {
-				let fetchingOrderNumber = row.fetching_order_number
 				const currentItemPriceData: any = {}
 				let count = 0
 				Object.entries<any>(JSON.parse(detail.payAmount)).forEach(([key, data]) => {
