@@ -34,9 +34,9 @@ class TSVFormat {
 
 	public link({ address }) {
 		const url = new URL(`${address}${this._id}`)
-		/*url.searchParams.set('utm_source', 'naver')
+		url.searchParams.set('utm_source', 'naver')
 		url.searchParams.set('utm_medium', 'cpc')
-		url.searchParams.set('utm_campaign', 'nfeed')*/
+		url.searchParams.set('utm_campaign', 'nfeed')
 		return url.href
 	}
 
@@ -44,7 +44,7 @@ class TSVFormat {
   	return this._gender
 	}
 
-	private color(customColor: string) {
+	public color(customColor: string) {
 		return isEmpty(customColor)
 			? ''
 			: ' ' + customColor
@@ -53,26 +53,26 @@ class TSVFormat {
 				.trim()
 	}
 
-	public searchTag({itemName, brandMainName, categoryName2, categoryName3}) {
+	public searchTag({brandName, brandNameKor, categoryName2, categoryName3, color, designerStyleId, originName, itemName, brandSemiName, categorySemiName}) {
   	itemName = itemName.trim()
   	const tags = [
-  		`${brandMainName}${itemName}`,
-			`${brandMainName}${this._gender}${categoryName3}`,
-			`${brandMainName}${this._gender}${categoryName2}`,
-			`${brandMainName}${categoryName3}`,
-			`${brandMainName}${categoryName2}`,
-			`${this._gender}명품${categoryName3}`,
-			`${this._gender}명품${categoryName2}`,
-			`${this._gender}${categoryName3}`,
-			`${this._gender}${categoryName2}`,
+			brandName, brandNameKor, categoryName2, categoryName3, color, designerStyleId, originName, itemName, brandSemiName, categorySemiName
 		]
-		return tags.join('|').split(' ').join('').split('\n').join(' ')
+		return tags.flat().join('|').split('\n').join(' ').split(' ').join('')
 	}
 
 	price(price: number): number {
 		let rawPrice = price
 
 		rawPrice *= 0.95
+
+		return Math.ceil(rawPrice / 100) * 100
+	}
+
+	priceMobile(price: number): number {
+		let rawPrice = price
+
+		rawPrice *= 0.94
 
 		return Math.ceil(rawPrice / 100) * 100
 	}

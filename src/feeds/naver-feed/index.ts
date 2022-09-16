@@ -11,6 +11,9 @@ import TSVData from './tsv-data'
 const constants = new Constants()
 
 export class NaverFeed implements iFeed {
+	brandSemiNameMap: any
+	categorySemiNameMap: any
+
 	async upload() {
 		const buffer = await this.getTsvBuffer()
 
@@ -29,6 +32,11 @@ export class NaverFeed implements iFeed {
 
 	async getTsv(delimiter = '\t'): Promise<string> {
 		const data = await MySQL.execute(NaverFeed.query())
+		const brandSemiNameRaw = await MySQL.execute('SELECT brand_id AS brandId, JSON_ARRAYAGG(semi_name) AS semiName FROM brand_search_name GROUP BY brand_id')
+		const categorySemiNameRaw = await MySQL.execute('SELECT category AS categoryId, JSON_ARRAYAGG(semi_name) AS semiName FROM category_semi_name GROUP BY category')
+
+		this.brandSemiNameMap = Object.fromEntries(brandSemiNameRaw.map(row => [row.brandId, row.semiName]))
+		this.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
 		const tsvData: TSVData[] = await Promise.all(
 			data.map(NaverFeed.makeRow),
 		)
@@ -47,6 +55,7 @@ export class NaverFeed implements iFeed {
 			       ii.shop_id AS shop_id,
 						 ii.item_code AS item_code,
 				
+			       bi.brand_id,
 			       bi.main_name,
 						 bi.brand_name,
 						 bi.brand_name_kor,
@@ -99,6 +108,14 @@ export class NaverFeed implements iFeed {
 			             AND fc.fetching_category_depth = 2
 			           LIMIT 1
 			       ) AS 'category_name3',
+             (
+                 SELECT fc.idx
+                 FROM fetching_category fc
+                          JOIN item_category_map icm on fc.idx = icm.fetching_category_id
+                 WHERE icm.item_id = ii.idx
+                   AND fc.fetching_category_depth = 2
+                 LIMIT 1
+             ) AS 'category_id3',
 			       (
 			           SELECT fc.smartstore_category_id
 			           FROM fetching_category fc
@@ -112,33 +129,10 @@ export class NaverFeed implements iFeed {
 			           FROM item_size i
 			           WHERE i.item_id = ii.idx
 			       ) AS 'option_detail',
-			       REPLACE(CONCAT_WS('|',
-			           CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
-			           CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.main_name, fc.fetching_category_name),
-			           (
-			               SELECT bsi.semi_name
-			               FROM brand_semi_name bsi
-			               WHERE bsi.brand_id = bi.brand_id
-			               LIMIT 1
-			           ),
-			           (
-			               SELECT bsi.semi_name
-			               FROM brand_semi_name bsi
-			               WHERE bsi.brand_id = bi.brand_id
-			               LIMIT 1 OFFSET 1
-			           ),
-			           (
-			               SELECT bsi.semi_name
-			               FROM brand_semi_name bsi
-			               WHERE bsi.brand_id = bi.brand_id
-			               LIMIT 1 OFFSET 2
-			      		 )
-			       ), '\t', ' ') AS 'search_tag',
 			       (SELECT COUNT(*) FROM commerce.review cr WHERE ii.idx = cr.item_id) AS review_count,
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM naver_upload_list nul USE INDEX (naver_upload_list_sequence_index)
 			    JOIN item_info ii on nul.item_id = ii.idx
-			    LEFT JOIN cafe24_upload_db cud ON cud.item_id = nul.item_id
 					JOIN item_show_price isp on ii.idx = isp.item_id
 			    JOIN shop_info si on ii.shop_id = si.shop_id
 			    JOIN country_info ci on ii.item_country = ci.country_tag
@@ -196,17 +190,15 @@ export class NaverFeed implements iFeed {
 		})
 		const mobileLink: string = pcLink
 		const searchTag: string = tsvFormat.searchTag({
-			itemName: row.item_name,
-			brandMainName: row.main_name,
-			categoryName2: row.category_name2,
-			categoryName3: row.category_name3,
+			brandName: row.brand_name, brandNameKor: row.brand_name_kor, categoryName2: row.category_name2, categoryName3: row.category_name3, color: tsvFormat.color(row.custom_color), designerStyleId: row.designer_style_id, originName: row.origin_name, itemName: row.item_name, brandSemiName: this.brandSemiNameMap[row.brand_id], categorySemiName: this.categorySemiNameMap[row.category_id3]
 		})
 
 		let price = tsvFormat.price(row.ip_final_price)
+		let priceMobile = tsvFormat.priceMobile(row.ip_final_price)
 		let point = Math.floor(price * 0.02)
 
 		// 이미지 리사이징 버전으로 교체
-		row.image_link = row.image_link.replace(
+		row['image_link'] = row.image_link.replace(
 			'fetching-app.s3.ap-northeast-2.amazonaws.com',
 			'static.fetchingapp.co.kr/resize/naver',
 		)
@@ -214,40 +206,41 @@ export class NaverFeed implements iFeed {
 		return {
 			id: `F${row.id}`,
 			title,
-			price_pc: price,
-			price_mobile: price,
-			normal_price: row.iop_final_price,
+			'price_pc': price,
+			'price_mobile': priceMobile,
+			'normal_price': row.iop_final_price,
 			link: pcLink,
-			mobile_link: mobileLink,
-			image_link: row.image_link,
-			add_image_link: row.add_image_link,
-			category_name1: row.category_name1,
-			category_name2: row.category_name2,
-			category_name3: row.category_name3,
-			naver_category: row.naver_category,
+			'mobile_link': mobileLink,
+			'image_link': row.image_link,
+			'add_image_link': row.add_image_link,
+			'category_name1': row.category_name1,
+			'category_name2': row.category_name2,
+			'category_name3': row.category_name3,
+			'naver_category': row.naver_category,
 			condition: constants.condition(),
 			brand: row.main_name,
-			event_words: constants.eventWords(),
+			'event_words': constants.eventWords(),
 			coupon: tsvFormat.coupon(row.ip_final_price),
-			partner_coupon_download: row.product_no
+			'partner_coupon_download': row.product_no
 				? tsvFormat.partnerCouponDownload(row.ip_final_price)
 				: '',
-			interest_free_event:
-				'삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~6',
+			'interest_free_event':
+				'삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~8',
 			point,
-			manufacture_define_number: row.designer_style_id || '',
-			naver_product_id: row.naver_product_id || '',
+			'manufacture_define_number': row.designer_style_id || '',
+			'naver_product_id': row.naver_product_id || '',
 			origin: row.country_name === 'Unknown' ? '' : row.country_name,
-			review_count: row.review_count,
+			'review_count': row.review_count,
 			shipping: constants.shipping(),
-			import_flag: ['해외편집샵', '해외브랜드'].includes(row.shop_type) ? row.import_flag : 'N',
-			option_detail: row.option_detail
+			'import_flag': ['해외편집샵', '해외브랜드'].includes(row.shop_type) ? row.import_flag : 'N',
+			'option_detail': row.option_detail
 				.split('\n')
 				.filter((str) => str)
 				.join(' '),
 			gender: tsvFormat.gender(),
-			includes_vat: constants.includesVat(),
-			search_tag: searchTag,
+			'includes_vat': constants.includesVat(),
+			'search_tag': searchTag,
+			maker: row.brand_name,
 		}
 	}
 }

@@ -29,6 +29,7 @@ type TSVData = {
   'option_detail': string
   gender: string
   'includes_vat': string
+  maker: string
 }
 
 export default TSVData
