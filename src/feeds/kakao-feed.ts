@@ -170,9 +170,9 @@ export class KakaoFeed implements iFeed {
 				.join(' ')
 
 			row['delivery_term'] = row.delivery_term.replace(/[^\d~]/g, '').split('~').pop()
-
-			const rating = row.ratings.length ? row.ratings.reduce((a, b) => a + b, 0) / row.ratings.length : 5
-			const reviewCount = row.reviews.length || 3 + Math.round(7 * Math.random())
+			if (row.reviews) console.log(row.reviews)
+			const rating = row.reviews?.length ? row.reviews.reduce((a, b) => a + b, 0) / row.reviews.length : 5
+			const reviewCount = row.reviews?.length || 3 + Math.round(7 * Math.random())
 
 			const sales = row.sales || 3 + Math.round(17 * Math.random())
 			const likeCount = row.likeCount || 10 + Math.round(20 * Math.random())

@@ -11,8 +11,8 @@ import TSVData from './tsv-data'
 const constants = new Constants()
 
 export class NaverFeed implements iFeed {
-	brandSemiNameMap: any
-	categorySemiNameMap: any
+	static brandSemiNameMap: any
+	static categorySemiNameMap: any
 
 	async upload() {
 		const buffer = await this.getTsvBuffer()
@@ -35,8 +35,8 @@ export class NaverFeed implements iFeed {
 		const brandSemiNameRaw = await MySQL.execute('SELECT brand_id AS brandId, JSON_ARRAYAGG(semi_name) AS semiName FROM brand_search_name GROUP BY brand_id')
 		const categorySemiNameRaw = await MySQL.execute('SELECT category AS categoryId, JSON_ARRAYAGG(semi_name) AS semiName FROM category_semi_name GROUP BY category')
 
-		this.brandSemiNameMap = Object.fromEntries(brandSemiNameRaw.map(row => [row.brandId, row.semiName]))
-		this.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
+		NaverFeed.brandSemiNameMap = Object.fromEntries(brandSemiNameRaw.map(row => [row.brandId, row.semiName]))
+		NaverFeed.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
 		const tsvData: TSVData[] = await Promise.all(
 			data.map(NaverFeed.makeRow),
 		)
@@ -190,7 +190,7 @@ export class NaverFeed implements iFeed {
 		})
 		const mobileLink: string = pcLink
 		const searchTag: string = tsvFormat.searchTag({
-			brandName: row.brand_name, brandNameKor: row.brand_name_kor, categoryName2: row.category_name2, categoryName3: row.category_name3, color: tsvFormat.color(row.custom_color), designerStyleId: row.designer_style_id, originName: row.origin_name, itemName: row.item_name, brandSemiName: this.brandSemiNameMap[row.brand_id], categorySemiName: this.categorySemiNameMap[row.category_id3]
+			brandName: row.brand_name, brandNameKor: row.brand_name_kor, categoryName2: row.category_name2, categoryName3: row.category_name3, color: tsvFormat.color(row.custom_color), designerStyleId: row.designer_style_id, originName: row.origin_name, itemName: row.item_name, brandSemiName: NaverFeed.brandSemiNameMap[row.brand_id], categorySemiName: NaverFeed.categorySemiNameMap[row.category_id3]
 		})
 
 		let price = tsvFormat.price(row.ip_final_price)
