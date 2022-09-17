@@ -38,7 +38,7 @@ export class NaverFeed implements iFeed {
 		NaverFeed.brandSemiNameMap = Object.fromEntries(brandSemiNameRaw.map(row => [row.brandId, row.semiName]))
 		NaverFeed.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
 		const tsvData: TSVData[] = await Promise.all(
-			data.map(NaverFeed.makeRow),
+			data.filter(row => row.option_detail).map(NaverFeed.makeRow),
 		)
 
 		return parse(tsvData, {
@@ -128,6 +128,8 @@ export class NaverFeed implements iFeed {
 			           SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', CEIL((ip.final_price + IFNULL(i.optional_price, 0)) * 0.97 / 100) * 100) SEPARATOR '|'), ',', 10)
 			           FROM item_size i
 			           WHERE i.item_id = ii.idx
+			             AND i.price_rule = isp.price_rule
+			          	 AND i.size_quantity > 0
 			       ) AS 'option_detail',
 			       (SELECT COUNT(*) FROM commerce.review cr WHERE ii.idx = cr.item_id) AS review_count,
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
