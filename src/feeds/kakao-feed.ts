@@ -206,7 +206,7 @@ export class KakaoFeed implements iFeed {
 <<<delivterm>>>${row.delivery_term}
 <<<rating>>>${rating}
 <<<revct>>>${reviewCount}
-<<<event>>>#20만원 즉시 할인 #전상품 무료배송 #2% 적립 #유럽 공홈 #최대 80% 할인 #카드사별 2~8개월 무이자 혜택
+<<<event>>>#20만원 즉시 할인 #전상품 무료배송 #관부가세 포함 #2% 적립 #최대 80% 할인 #카드사별 2~8개월 무이자 혜택
 <<<sales>>>${sales}
 <<<likecnt>>>${likeCount}
 <<<pubdate>>>${moment(row.createdAt).format('YYYYMMDD')}
