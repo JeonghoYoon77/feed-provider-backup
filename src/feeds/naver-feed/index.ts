@@ -179,7 +179,6 @@ export class NaverFeed implements iFeed {
 			mainName: row.main_name,
 			brandName: row.brand_name,
 			brandNameKor: row.brand_name_kor,
-			gender: row.item_gender,
 			lastCategory:
 				row.category_name3 === '기타'
 					? row.category_name2
