@@ -10,22 +10,21 @@ import {MySQL, S3Client} from '../utils'
 
 import {iFeed} from './feed'
 
-export class OrderFeed implements iFeed {
+export class OrderPredictionFeed implements iFeed {
 	async getTsvBuffer(): Promise<Buffer> {
-		return Buffer.from(await this.getTsv({start: null, end: null}), 'utf-8')
+		return Buffer.from(await this.getTsv(), 'utf-8')
 	}
 
-	async getTsvBufferWithRange(start: Date, end: Date, targetSheetId = null): Promise<Buffer> {
-		return Buffer.from(await this.getTsv({start, end, targetSheetId}), 'utf-8')
-	}
-
-	async getTsv({start, end, targetSheetId}: { start: Date, end: Date, targetSheetId?: string }): Promise<string> {
+	async getTsv(): Promise<string> {
 		// 재무 시트
 		const doc = new GoogleSpreadsheet(
 			'1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0'
 		)
 		const taxDoc = new GoogleSpreadsheet(
 			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU'
+		)
+		const targetDoc = new GoogleSpreadsheet(
+			'1hmp69Ej9Gr4JU1KJ6iHO-iv1Tga5lMyp8NO5-yRDMlU'
 		)
 
 		/* eslint-disable camelcase */
@@ -37,10 +36,15 @@ export class OrderFeed implements iFeed {
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
 		})
+		await targetDoc.useServiceAccountAuth({
+			client_email: sheetData.client_email,
+			private_key: sheetData.private_key,
+		})
 		/* eslint-enable camelcase */
 
 		await doc.loadInfo()
 		await taxDoc.loadInfo()
+		await targetDoc.loadInfo()
 
 		const eldexSheet = doc.sheetsByTitle['엘덱스비용'] // 엘덱스비용
 		const cardSheet = doc.sheetsByTitle['롯데카드이용내역'] // 롯데카드이용내역 (정확하지만 한달에 한번씩만 갱신)
@@ -121,10 +125,7 @@ export class OrderFeed implements iFeed {
                                             AND to_value = 'ORDER_COMPLETE'
                                           ORDER BY fom2.created_at DESC
                                           LIMIT 1))                                         orderedAt,
-                 so.shipping_completed_at + INTERVAL 1 WEEK                              as completedAt,
-                 od.recipient_name                                                       as name,
-                 od.phone_number                                                         as phone,
-                 JSON_ARRAYAGG(CONCAT(si.shop_name, ' ', sp.shop_country))                    AS shopName,
+                 JSON_ARRAYAGG(CONCAT(si.shop_name, ' ', sp.shop_country))               AS shopName,
                  GROUP_CONCAT(DISTINCT ii.item_name)                                     AS itemName,
                  (SELECT SUM(io.quantity)
                   FROM commerce.shop_order so2
@@ -132,13 +133,7 @@ export class OrderFeed implements iFeed {
                   WHERE so2.fetching_order_number = fo.fetching_order_number
                   GROUP BY so2.fetching_order_number)                                    AS quantity,
                  fo.fetching_order_number,
-                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io.item_order_number, 'orderedAt',
-                                                   COALESCE(io.ordered_at, (SELECT fom2.created_at
-                                                                            FROM commerce.fetching_order_memo fom2
-                                                                            WHERE so.shop_order_number = fom2.shop_order_number
-                                                                              AND to_value = 'ORDER_COMPLETE'
-                                                                            ORDER BY fom2.created_at DESC
-                                                                            LIMIT 1))))) AS itemOrderNumber,
+                 (SELECT JSON_ARRAYAGG(io.item_order_number)) AS itemOrderNumber,
                  GROUP_CONCAT(DISTINCT so.vendor_order_number separator ', ')            AS vendorOrderNumber,
                  GROUP_CONCAT(DISTINCT so.card_approval_number separator ', ')           AS cardApprovalNumber,
                  fo.pay_amount                                                           AS payAmount,
@@ -176,17 +171,18 @@ export class OrderFeed implements iFeed {
                                              and so2.shop_order_number = io2.shop_order_number
                               left join commerce.order_cancel_item oci2
                                         on 1 = 1
-                                            and io2.item_order_number = oci2.item_order_number AND oci2.status = 'ACCEPT'
+                                            and io2.item_order_number = oci2.item_order_number AND
+                                           oci2.status = 'ACCEPT'
                               left join commerce.order_return_item ori2
                                         on 1 = 1
-                                            and io2.item_order_number = ori2.item_order_number AND ori2.status = 'ACCEPT'
+                                            and io2.item_order_number = ori2.item_order_number AND
+                                           ori2.status = 'ACCEPT'
                      WHERE 1 = 1
                        AND so2.fetching_order_number = fo.fetching_order_number
                  )                                                                       as itemStatusList,
                  ssi.customer_negligence_return_fee                                      AS returnFee,
                  oret.reason_type                                                        AS returnReason,
                  fo.status                                                               AS orderStatus,
-                 so.status                                                               AS shopStatus,
                  JSON_ARRAYAGG(scc.name)                                                 AS shippingCompany,
                  JSON_ARRAYAGG(io.invoice)                                               AS invoice,
                  (SELECT JSON_ARRAYAGG(opcl.data)
@@ -196,25 +192,30 @@ export class OrderFeed implements iFeed {
                  (SELECT JSON_ARRAYAGG(oapcl.data)
                   FROM commerce.order_additional_pay_cancel_log oapcl
                            JOIN commerce.order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
-                           JOIN commerce.order_additional_pay_item oapi ON oapi.additional_item_number = oapl.additional_item_number
-                           JOIN commerce.order_additional_pay oap on oap.order_additional_number = oapi.order_additional_number
+                           JOIN commerce.order_additional_pay_item oapi
+                                ON oapi.additional_item_number = oapl.additional_item_number
+                           JOIN commerce.order_additional_pay oap
+                                on oap.order_additional_number = oapi.order_additional_number
                   WHERE oap.fetching_order_number = fo.fetching_order_number)            AS additionalRefundData,
                  case
                      when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
                          then fo.pay_amount
                      else oref.refund_amount
-                     end                                                                   AS refundAmount,
+                     end                                                                 AS refundAmount,
                  fo.pay_amount_detail                                                    AS payAmountDetail,
                  (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io2.item_order_number,
                                                    'payAmount', io2.pay_amount_detail,
                                                    'country', sp2.shop_country,
                                                    'isRefunded', ori2.item_order_number IS NOT NULL,
-                                                   'vatDeductionRate', IF(dm2.vat_deduct && sp2.is_vat_deduction_available, sp2.vat_deduction_rate, 0),
+                                                   'vatDeductionRate',
+                                                   IF(dm2.vat_deduct && sp2.is_vat_deduction_available,
+                                                      sp2.vat_deduction_rate, 0),
                                                    'waypointFeeType', dm2.fee_type,
                                                    'waypointFeeWithDeduction', dm2.fee_with_deduction,
                                                    'waypointFeeWithoutDeduction', dm2.fee_without_deduction,
                                                    'minimumWaypointFeeWithDeduction', dm2.minimum_fee_with_deduction,
-                                                   'minimumWaypointFeeWithoutDeduction', dm2.minimum_fee_without_deduction
+                                                   'minimumWaypointFeeWithoutDeduction',
+                                                   dm2.minimum_fee_without_deduction
                      ))
                   FROM commerce.item_order io2
                            LEFT JOIN commerce.order_refund_item ori2
@@ -224,50 +225,21 @@ export class OrderFeed implements iFeed {
                            JOIN shop_price sp2 ON so2.shop_id = sp2.idx
                            JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
                   WHERE so2.fetching_order_number = fo.fetching_order_number)            AS itemPayAmountDetail,
-                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io2.item_order_number, 'payAmount',
-                                                   io2.pay_amount_detail, 'country', sp2.shop_country, 'isRefunded',
-                                                   ori2.item_order_number IS NOT NULL))
-                  FROM commerce.item_order io2
-                           LEFT JOIN commerce.order_refund_item ori2
-                                     ON ori2.item_order_number = io2.item_order_number AND ori2.status = 'ACCEPT' AND
-                                        ori2.deleted_at IS NULL
-                           JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
-                           JOIN shop_price sp2 ON so2.shop_id = sp2.idx
-                  WHERE so2.fetching_order_number = fo.fetching_order_number
-                    AND sp2.delivery_method=5)                                           AS fasstoItemPayAmountDetail,
                  COALESCE(fo.coupon_discount_amount, 0)                                  AS couponDiscountAmount,
                  COALESCE(fo.use_point, 0)                                               as pointDiscountAmount,
-                 exists(
-                         select 1
-                         from commerce.order_refund refund
-                         where 1 = 1
-                           and refund.status = 'ACCEPT'
-                           and refund.fetching_order_number = fo.fetching_order_number
-                     )                                                                     AS taxRefunded,
                  so.is_ddp_service                                                       AS isDDP,
-                 weight                                                                  AS weight,
-                 JSON_ARRAYAGG(CONCAT(dm.name, ' ', dm.country))                         AS deliveryMethod,
-                 (SELECT u.name
-                  FROM commerce.fetching_order_memo fom
-                           JOIN fetching_dev.users u ON fom.admin_id = u.idx
-                  WHERE fom.fetching_order_number = fo.fetching_order_number AND fom.to_value = 'ORDER_COMPLETE'
-                  ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
-                  LIMIT 1)                                                               AS assignee
+                 JSON_ARRAYAGG(CONCAT(dm.name, ' ', dm.country))                         AS deliveryMethod
           FROM commerce.fetching_order fo
                    JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
                    JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
                    LEFT JOIN commerce.order_cancel_item oci on io.item_order_number = oci.item_order_number
                    LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
-                   LEFT JOIN commerce.order_exchange_item oei on oei.item_order_number = io.item_order_number
-                   LEFT JOIN commerce.order_exchange oe on oei.order_exchange_number = oe.order_exchange_number
                    LEFT JOIN commerce.order_return_item oreti on oreti.item_order_number = io.item_order_number
                    LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
                    LEFT JOIN commerce.order_refund_item orefi on orefi.item_order_number = io.item_order_number
                    LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
-                   LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
-                   JOIN commerce.user u on fo.user_id = u.idx
+              		 LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
                    JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
-                   LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
                    JOIN shop_price sp on so.shop_id = sp.idx
                    JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
                    JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
@@ -275,24 +247,18 @@ export class OrderFeed implements iFeed {
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
             AND (
-                      (fo.created_at + INTERVAL 9 HOUR) >= ?
+                      (fo.created_at + INTERVAL 9 HOUR) >= '2022-09-20'
                   AND
-                      (fo.created_at + INTERVAL 9 HOUR) < ?
+                      (fo.created_at + INTERVAL 9 HOUR) < '2022-09-28'
               )
           GROUP BY fo.fetching_order_number
           ORDER BY fo.created_at ASC
-      `,
-			[start, end]
+      `
 		)
 
-		const [{currencyRate}] = await MySQL.execute(`
-        SELECT currency_rate as currencyRate
-        FROM currency_info
-        WHERE currency_tag = 'EUR'
-    `)
-
 		const feed = data.map((row) => {
-			row.itemOrderNumber = row.itemOrderNumber.map(itemOrder => [itemOrder.itemOrderNumber, itemOrder.orderedAt ? `(${DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss')})` : ''].join(' ').trim()).join(', ')
+			//row.itemOrderNumber = row.itemOrderNumber.map(itemOrder => [itemOrder.itemOrderNumber, itemOrder.orderedAt ? `(${DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss')})` : ''].join(' ').trim()).join(', ')
+			row.itemOrderNumber = row.itemOrderNumber.join(', ')
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001'
@@ -337,8 +303,6 @@ export class OrderFeed implements iFeed {
 				}
 			})
 
-			const remarks = []
-
 			let pgFee = 0
 
 			if (row.pay_method === 'CARD') {
@@ -379,14 +343,6 @@ export class OrderFeed implements iFeed {
 
 			const cardApprovalNumberList =
         row.cardApprovalNumber?.split(',') ?? []
-
-			const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
-				const cardApprovalNumber = e.trim()
-
-				const refund = cardRefund[cardApprovalNumber] || 0
-
-				return refund + acc
-			}, 0)
 
 			let cardPurchaseValue = cardApprovalNumberList.reduce((acc, e) => {
 				const cardApprovalNumber = e.trim()
@@ -470,126 +426,85 @@ export class OrderFeed implements iFeed {
 				row.returnFee = 0
 			}
 
-			if (row.cardApprovalNumber?.includes('매입')) {
-				remarks.push('매입')
-			}
-
-			// 매입환출 완료여부
-			let purchaseReturn = '환출미완료'
-
-			if (
-				(row.itemStatusList?.includes('주문 취소') ||
-          row.itemStatusList?.includes('반품')) &&
-        cardPurchaseValue !== 0
-			) {
-				if (cardRefundValue < 0) {
-					purchaseReturn = '환출완료'
-				}
-			} else {
-				purchaseReturn = '해당없음'
-			}
-
-			const taxTotal = tax[row.fetching_order_number] || 0
-			let taxRefund: any = 0
-
-			if (row.taxRefunded == 1) {
-				taxRefund = taxTotal
-				if (status.includes('일부')) taxRefund = '수동 확인 필요'
-			}
-
-			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] - itemPriceData['DEDUCTED_VAT'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
+			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
 
 			if (row.cardApprovalNumber === '파스토') cardPurchaseValue = purchaseValue
 
-			let waypointDeliveryFee = eldex[row.invoice] ?? 0
-
-			if (row.weight) {
-				waypointDeliveryFee = ((row.weight < 1 ? 3 + 3.2 + 1.5 : 3 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3)
-			}
-
 			const data = {
 				주문일: DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
-				상태: status,
-				'배송 유형': [...new Set(row.deliveryMethod)].join(', '),
-				구매확정일: row.completedAt ? DateTime.fromISO(row.completedAt.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss') : null,
-				편집샵명: [...new Set(row.shopName)].join(', '),
-				상품명: row.itemName,
-				수량: row.quantity,
-				주문번호: row.fetching_order_number,
+				'주문 상태': status,
 				'상품별 주문번호': row.itemOrderNumber,
-				'편집샵 주문번호': row.vendorOrderNumber,
 				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
+				'전체 주문번호': row.fetching_order_number,
+				'편집샵 매입 주문번호': row.vendorOrderNumber,
+				// '카드사': '롯데카드',
+				'운송 업체': [...new Set(row.shippingCompany)].join(','),
+				'운송장 번호': [...new Set(row.invoice)].join(','),
+				'배송 유형': [...new Set(row.deliveryMethod)].join(', '),
+				'세금 부과 방식': row.isDDP ? 'DDP' : 'DDU',
+				'편집샵명': [...new Set(row.shopName)].join(', '),
 				'결제 방식': row.pay_method,
-				'페칭 판매가': priceData['ORIGIN_PRICE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0),
+				'상품명': row.itemName,
+				'수량': row.quantity,
+				'편집샵 결제가': purchaseValue, // cardPurchaseValue,
+				'관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']), // taxTotal
+				'운송료': itemPriceData['ADDITIONAL_FEE'] || 0, // waypointDeliveryFee
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
-				'롯데카드 캐시백': ((cardPurchaseValue - cardRefundValue) * 0.025).toFixed(3),
-				쿠폰: row.couponDiscountAmount,
-				적립금: row.pointDiscountAmount,
-				결제가: row.payAmount,
-				환불금액: refundAmount,
+				'쿠폰': row.couponDiscountAmount,
+				'적립금': row.pointDiscountAmount,
 				'PG수수료': pgFee,
-				'운송장번호': [...new Set(row.invoice)].join(','),
-				'예상 배대지 비용': itemPriceData['ADDITIONAL_FEE'] || 0,
-				'실 배대지 비용': waypointDeliveryFee,
-				'예상 관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']),
-				'납부 관부가세': taxTotal,
-				'관부가세 환급': taxRefund,
+				'실 결제 금액': row.payAmount,
+				'결제 환불 금액': refundAmount,
 				'PG수수료 환불': refundPgFee,
-				'예상 매입 금액': purchaseValue,
-				'실 매입 금액': cardPurchaseValue,
-				'예상 매입환출금': (cancelCount || returnCount) && row.vendorOrderNumber ? (completeCount && settleCount) ? Math.abs(lCardRefundValue) : Math.abs(cardPurchaseValue) : 0,
-				'실 매입환출금액': -cardRefundValue,
-				반품수수료: row.returnFee || 0,
-				비고: remarks.join(', '),
-				'발주 담당자': row.assignee,
-				// 주문자: row.name,
-				// 전화번호: decryptInfo(row.phone) + ' ',
-				// '매입환출 완료여부': purchaseReturn,
+				// '국내 반품 비용': '',
+				// 'IBP 반품 비용': '',
+				// '보상 적립금': '',
+				// '수선 비용': '',
+				'매입 환출 금액': (cancelCount || returnCount) && row.vendorOrderNumber ? Math.abs(lCardRefundValue) : 0, // -cardRefundValue,
 			}
 
 			return data
 		})
 
-		if (targetSheetId) {
-			let targetSheet = doc.sheetsById[targetSheetId]
-			const rows = await targetSheet.getRows()
-			// @ts-ignore
-			await targetSheet.loadCells()
-			let hasModified = false
-			for (const i in feed) {
-				if (rows[i]) {
-					for (const key of Object.keys(feed[i])) {
-						if (['예상 배대지 비용'].includes(key)) continue
-						if (['실 배대지 비용'].includes(key)) continue
-						if (['수동 확인 필요'].includes(feed[i][key])) continue
-						if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
-						if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
-						if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
+		let targetSheet = targetDoc.sheetsById[2016259526]
+		const rows = await targetSheet.getRows()
+		// @ts-ignore
+		await targetSheet.loadCells()
+		let hasModified = false
+		for (const i in feed) {
+			if (rows[i]) {
+				for (const key of Object.keys(feed[i])) {
+					if (['예상 배대지 비용'].includes(key)) continue
+					if (['실 배대지 비용'].includes(key)) continue
+					if (['수동 확인 필요'].includes(feed[i][key])) continue
+					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
+					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
+					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
-						const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
+					console.log(key, feed[i][key])
+					const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
 
-						if (cell?.effectiveFormat?.backgroundColor) {
-							const {red, green, blue} = cell.effectiveFormat.backgroundColor
-							if (!(red === 1 && green === 1 && blue === 1)) continue
-						}
-						if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
-
-						cell.value = feed[i][key]
-						hasModified = true
+					if (cell?.effectiveFormat?.backgroundColor) {
+						const {red, green, blue} = cell.effectiveFormat.backgroundColor
+						if (!(red === 1 && green === 1 && blue === 1)) continue
 					}
-				} else {
-					await retry(3, 3000)(async () => {
-						await targetSheet.addRow(feed[i], {raw: true, insert: true})
-					})
-					await sleep(500)
+					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
+
+					cell.value = feed[i][key]
+					hasModified = true
 				}
-			}
-			if (hasModified) {
+			} else {
 				await retry(3, 3000)(async () => {
-					await targetSheet.saveUpdatedCells()
+					await targetSheet.addRow(feed[i], {raw: true, insert: true})
 				})
+				await sleep(500)
 			}
+		}
+		if (hasModified) {
+			await retry(3, 3000)(async () => {
+				await targetSheet.saveUpdatedCells()
+			})
 		}
 
 		return parse(feed, {
@@ -600,134 +515,6 @@ export class OrderFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '1월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-01-01T00:00:00.000Z'),
-					new Date('2022-02-01T00:00:00.000Z'),
-					'1343179746'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-02-01T00:00:00.000Z'),
-					new Date('2022-03-01T00:00:00.000Z'),
-					'65319871'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '3월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-03-01T00:00:00.000Z'),
-					new Date('2022-04-01T00:00:00.000Z'),
-					'1595058800'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '4월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-04-01T00:00:00.000Z'),
-					new Date('2022-05-01T00:00:00.000Z'),
-					'513874448'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '5월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-05-01T00:00:00.000Z'),
-					new Date('2022-06-01T00:00:00.000Z'),
-					'738638695'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '6월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-06-01T00:00:00.000Z'),
-					new Date('2022-07-01T00:00:00.000Z'),
-					'806883469'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '7월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-07-01T00:00:00.000Z'),
-					new Date('2022-08-01T00:00:00.000Z'),
-					'2046794903'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '8월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-08-01T00:00:00.000Z'),
-					new Date('2022-09-01T00:00:00.000Z'),
-					'1435351181'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '9월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-09-01T00:00:00.000Z'),
-					new Date('2022-10-01T00:00:00.000Z'),
-					'532128954'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '10월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-10-01T00:00:00.000Z'),
-					new Date('2022-11-01T00:00:00.000Z'),
-					'1035159305'
-				),
-				contentType: 'text/csv',
-			})
-		)
+		await this.getTsvBuffer()
 	}
 }
