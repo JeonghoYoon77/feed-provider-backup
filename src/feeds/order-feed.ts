@@ -265,6 +265,7 @@ export class OrderFeed implements iFeed {
                    LEFT JOIN commerce.order_refund_item orefi on orefi.item_order_number = io.item_order_number
                    LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
                    LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
+                   LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
                    JOIN commerce.user u on fo.user_id = u.idx
                    JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
                    LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
