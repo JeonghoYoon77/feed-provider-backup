@@ -323,6 +323,8 @@ export class OrderPredictionFeed implements iFeed {
 
 			let status = `${row.itemOrderStatus} (${Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', ')})`
 
+			if (['P-20220920-0000007', 'P-20220923-0000008', 'P-20220927-0000015'].includes(row.itemOrderNumber)) console.log(row.itemOrderNumber, row.itemOrderStatus, status)
+
 			let pgFee = 0
 
 			if (row.pay_method === 'CARD') {
@@ -503,10 +505,7 @@ export class OrderPredictionFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (['예상 배대지 비용'].includes(key)) continue
-					if (['실 배대지 비용'].includes(key)) continue
-					if (['수동 확인 필요'].includes(feed[i][key])) continue
-					if (isEmpty(rows[i][key]) === isEmpty(feed[i][key])) continue
+					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key])) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue

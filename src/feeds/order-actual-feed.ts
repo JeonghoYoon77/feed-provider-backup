@@ -612,10 +612,7 @@ export class OrderActualFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (['예상 배대지 비용'].includes(key)) continue
-					if (['실 배대지 비용'].includes(key)) continue
-					if (['수동 확인 필요'].includes(feed[i][key])) continue
-					if (isEmpty(rows[i][key]) === isEmpty(feed[i][key])) continue
+					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key])) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
