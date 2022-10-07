@@ -46,26 +46,54 @@ export class OrderActualFeed implements iFeed {
 		await taxDoc.loadInfo()
 		await targetDoc.loadInfo()
 
+		let cardCompanySheet = targetDoc.sheetsById[1873303120]
+
+		const cardCompanyRaw = await cardCompanySheet.getRows()
+
+		const cardCompany = {}
+
+		cardCompanyRaw.forEach(row => {
+			cardCompany[row['상품별 주문번호']] = row['카드사']
+		})
+
 		const eldexSheet = doc.sheetsByTitle['엘덱스비용'] // 엘덱스비용
-		const cardSheet = doc.sheetsByTitle['롯데카드이용내역'] // 롯데카드이용내역 (정확하지만 한달에 한번씩만 갱신)
-		const cardExtraSheet = doc.sheetsByTitle['롯데카드승인내역'] // 롯데카드승인내역 (부정확하지만 자주 갱신)
+		const ibpSheet = targetDoc.sheetsById['325601058'] // IBP 배송 비용
+		// const eldexSheet = targetDoc.sheetsById['980121221'] // 엘덱스 배송 비용
+		const lotteCardSheet = targetDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
+		const lotteCardExtraSheet = targetDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
+		const samsungCardSheet = targetDoc.sheetsById['880709363'] // 삼성카드 매출내역
 		const taxSheet = taxDoc.sheetsById['1605798118']
 
 		const eldexRaw = await eldexSheet.getRows()
-		const cardRaw = await cardSheet.getRows()
-		const cardExtraRaw = await cardExtraSheet.getRows()
+		const ibpRaw = await ibpSheet.getRows()
+		const lotteCardRaw = await lotteCardSheet.getRows()
+		const lotteCardExtraRaw = await lotteCardExtraSheet.getRows()
+		const samsungCardRaw = await samsungCardSheet.getRows()
 		const taxRaw = await taxSheet.getRows()
 
 		const eldex = {}
-		const card = {}
-		const cardExtra = {}
-		const cardRefund = {}
+		const ibp = {}
+		const lotteCard = {}
+		const lotteCardExtra = {}
+		const lotteCardRefund = {}
+		const samsungCard = {}
+		const samsungCardRefund = {}
 		const tax = {}
 
 		eldexRaw.forEach((row) => {
 			const id = row['송장번호']
 			const value = row['2차결제금액(원)'].replace(/,/g, '')
 			eldex[id] = parseInt(value)
+		})
+
+		ibpRaw.forEach((row) => {
+			if (row['관리번호']) {
+				const id = parseInt(row['관리번호'].replace(/[^\d]/g, ''))
+				let value = parseInt(row['중량'])
+				if (value < 1) value = 1
+				value = Math.ceil(value / 0.5)
+				ibp[id] = 4.1 + 2 * value
+			}
 		})
 
 		taxRaw.forEach((row) => {
@@ -76,43 +104,55 @@ export class OrderActualFeed implements iFeed {
 			}
 		})
 
-		cardRaw.forEach((row) => {
+		lotteCardRaw.forEach((row) => {
 			const id = row['승인번호'].trim()
-			const value = parseInt(row['청구금액'].replace(/,/g, ''))
-			const refundValue = parseInt(row['전월취소및부분취소'].replace(/,/g, ''))
+			const value = parseInt(row['승인금액'].replace(/,/g, ''))
+			const isCanceled = row['매출취소 여부'] === 'Y'
 
-			cardRefund[id] = 0
+			lotteCardRefund[id] = 0
 
 			if (value < 0) {
-				cardRefund[id] = value
+				lotteCard[id] = -value
+				lotteCardRefund[id] = value
 			} else if (value > 0) {
-				card[id] = value
-			}
-
-			if (refundValue < 0) {
-				cardRefund[id] = refundValue
+				lotteCard[id] = value
+				if (isCanceled) lotteCardRefund[id] = -value
 			}
 		})
 
-		cardExtraRaw.forEach((row) => {
+		lotteCardExtraRaw.forEach((row) => {
 			const id = row['승인번호'].trim()
-			const value = parseInt(row['승인금액(원화)'].replace(/,/g, ''))
-			const isCanceled = row['취소여부'] === 'Y'
+			const value = parseInt(row['승인금액'].replace(/,/g, ''))
+			const isCanceled = ['매입취소', '전액승인취소'].includes(row['승인구분'])
+
+			if (lotteCardRefund[id] === undefined) lotteCardRefund[id] = 0
 
 			if (value > 0) {
-				if (isCanceled) {
-					cardRefund[id] = -value
-				} else {
-					cardExtra[id] = value
+				lotteCardExtra[id] = value
+				if (isCanceled && (lotteCardRefund[id] === 0 || lotteCardRefund[id] === undefined)) {
+					lotteCardRefund[id] = -value
+				}
+			} else {
+				lotteCardExtra[id] = -value
+				if (isCanceled && (lotteCardRefund[id] === 0 || lotteCardRefund[id] === undefined)) {
+					lotteCardRefund[id] = value
 				}
 			}
+		})
 
-			if (cardRefund[id] === 0 && cardRefund[id] === undefined) {
-				cardRefund[id] = 0
+		samsungCardRaw.forEach((row) => {
+			const id = row['승인번호'].trim()
+			const value = parseInt(row['거래금액(원화)'].replace(/,/g, ''))
+			const isCanceled = row['승인취소여부'] === 'Y'
 
-				if (value < 0) {
-					cardRefund[id] = value
-				}
+			samsungCardRefund[id] = 0
+
+			if (value < 0) {
+				samsungCard[id] = -value
+				samsungCardRefund[id] = value
+			} else if (value > 0) {
+				samsungCard[id] = value
+				if (isCanceled) samsungCardRefund[id] = -value
 			}
 		})
 
@@ -318,6 +358,7 @@ export class OrderActualFeed implements iFeed {
                      )                                                        AS taxRefunded,
                  so.is_ddp_service                                            AS isDDP,
                  weight                                                       AS weight,
+                 imc.idx                                                      AS ibpManageCode,
                  CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
                  (SELECT u.name
                   FROM commerce.fetching_order_memo fom
@@ -342,7 +383,8 @@ export class OrderActualFeed implements iFeed {
                    LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
                    JOIN commerce.user u on fo.user_id = u.idx
                    JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
-                   LEFT JOIN commerce.shop_order_weight sow ON so.shop_order_number = sow.shop_order_number
+                   LEFT JOIN commerce.item_order_weight iow ON io.item_order_number = iow.item_order_number
+              		 LEFT JOIN commerce.ibp_manage_code imc ON io.item_order_number = imc.item_order_number
                    JOIN shop_price sp on so.shop_id = sp.idx
                    JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
                    JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
@@ -389,10 +431,7 @@ export class OrderActualFeed implements iFeed {
 				statusCount[status]++
 			}
 
-			let cancelCount = statusCount['주문 취소'] ?? 0
 			let returnCount = statusCount['반품'] ?? 0
-
-			let status = `${row.itemOrderStatus} (${Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', ')})`
 
 			const priceData: any = {}
 			JSON.parse(row.payAmountDetail).forEach((row) => {
@@ -447,7 +486,7 @@ export class OrderActualFeed implements iFeed {
 			const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
 				const cardApprovalNumber = e.trim()
 
-				const refund = cardRefund[cardApprovalNumber] || 0
+				const refund = cardCompany[row.itemOrderNumber] === '삼성카드' ? samsungCardRefund[cardApprovalNumber] || 0 : lotteCardRefund[cardApprovalNumber] || 0
 
 				return refund + acc
 			}, 0)
@@ -456,7 +495,7 @@ export class OrderActualFeed implements iFeed {
 				const cardApprovalNumber = e.trim()
 
 				const value =
-					card[cardApprovalNumber] || cardExtra[cardApprovalNumber] || 0
+					cardCompany[row.itemOrderNumber] === '삼성카드' ? samsungCard[cardApprovalNumber] : lotteCard[cardApprovalNumber] || lotteCardExtra[cardApprovalNumber] || 0
 
 				return value + acc
 			}, 0)
@@ -541,8 +580,10 @@ export class OrderActualFeed implements iFeed {
 
 			let waypointDeliveryFee = parseInt(eldex[row.invoice] ?? '0')
 
-			if (row.weight) {
-				waypointDeliveryFee = parseFloat(((row.weight < 1 ? 3 + 3.2 + 1.5 : 3 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
+			if (row.ibpManageCode) {
+				waypointDeliveryFee = (ibp[row.ibpManageCode] ?? 0) * currencyRate
+			} else if (row.weight) {
+				waypointDeliveryFee = parseFloat(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			}
 
 			let coupon = 0, point = 0
@@ -571,12 +612,13 @@ export class OrderActualFeed implements iFeed {
 
 			const data = {
 				주문일: DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
-				'주문 상태': status,
+				'주문 상태': row.itemOrderStatus,
 				'상품별 주문번호': row.itemOrderNumber,
 				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
 				'전체 주문번호': row.fetching_order_number,
+				// '전체 주문 상태': Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', '),
 				'편집샵 주문번호': row.vendorOrderNumber,
-				// '카드사': '롯데카드',
+				'카드사': '롯데카드',
 				'운송 업체': row.shippingCompany,
 				'운송장 번호': row.invoice,
 				'배송 유형': row.deliveryMethod,
@@ -594,8 +636,8 @@ export class OrderActualFeed implements iFeed {
 				'PG수수료': pgFee,
 				'실 결제 금액': row.payAmount,
 				'환불금액': refundAmount,
-				// '국내 반품 비용': '',
-				// 'IBP 반품 비용': '',
+				// '반품 배송비': '',
+				'반품 비용': row.returnFee,
 				// '보상 적립금': '',
 				// '수선 비용': '',
 				'매입환출금액': -cardRefundValue,
@@ -612,12 +654,13 @@ export class OrderActualFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key])) continue
+					if (['운송료', '카드사'].includes(key)) continue
+					if (['수동 확인 필요'].includes(feed[i][key])) continue
+					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key]) && rows[i][key] === '' && (isNil(feed[i][key]) || feed[i][key] === '')) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
-					console.log(key, feed[i][key])
 					const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
 
 					if (cell?.effectiveFormat?.backgroundColor) {

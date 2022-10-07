@@ -16,58 +16,18 @@ export class OrderPredictionFeed implements iFeed {
 	}
 
 	async getTsv(): Promise<string> {
-		// 재무 시트
-		const doc = new GoogleSpreadsheet(
-			'1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0'
-		)
-		const taxDoc = new GoogleSpreadsheet(
-			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU'
-		)
 		const targetDoc = new GoogleSpreadsheet(
 			'1hmp69Ej9Gr4JU1KJ6iHO-iv1Tga5lMyp8NO5-yRDMlU'
 		)
 
 		/* eslint-disable camelcase */
-		await doc.useServiceAccountAuth({
-			client_email: sheetData.client_email,
-			private_key: sheetData.private_key,
-		})
-		await taxDoc.useServiceAccountAuth({
-			client_email: sheetData.client_email,
-			private_key: sheetData.private_key,
-		})
 		await targetDoc.useServiceAccountAuth({
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
 		})
 		/* eslint-enable camelcase */
 
-		await doc.loadInfo()
-		await taxDoc.loadInfo()
 		await targetDoc.loadInfo()
-
-		const eldexSheet = doc.sheetsByTitle['엘덱스비용'] // 엘덱스비용
-		const taxSheet = taxDoc.sheetsById['1605798118']
-
-		const eldexRaw = await eldexSheet.getRows()
-		const taxRaw = await taxSheet.getRows()
-
-		const eldex = {}
-		const tax = {}
-
-		eldexRaw.forEach((row) => {
-			const id = row['송장번호']
-			const value = row['2차결제금액(원)'].replace(/,/g, '')
-			eldex[id] = parseInt(value)
-		})
-
-		taxRaw.forEach((row) => {
-			if (row['주문번호']) {
-				const id = row['주문번호'].trim()
-				const value = row['고지 금액'].replace(/,/g, '')
-				tax[id] = parseInt(value)
-			}
-		})
 
 		const data = await MySQL.execute(
 			`
@@ -288,8 +248,6 @@ export class OrderPredictionFeed implements iFeed {
             AND fo.deleted_at IS NULL
             AND (
                       (fo.created_at + INTERVAL 9 HOUR) >= '2022-09-20'
-                  AND
-                      (fo.created_at + INTERVAL 9 HOUR) < '2022-09-28'
               )
           GROUP BY io.item_order_number
           ORDER BY fo.created_at ASC
@@ -320,10 +278,6 @@ export class OrderPredictionFeed implements iFeed {
 
 			let cancelCount = statusCount['주문 취소'] ?? 0
 			let returnCount = statusCount['반품'] ?? 0
-
-			let status = `${row.itemOrderStatus} (${Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', ')})`
-
-			if (['P-20220920-0000007', 'P-20220923-0000008', 'P-20220927-0000015'].includes(row.itemOrderNumber)) console.log(row.itemOrderNumber, row.itemOrderStatus, status)
 
 			let pgFee = 0
 
@@ -435,7 +389,7 @@ export class OrderPredictionFeed implements iFeed {
 			}
 
 			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
-			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
+			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (itemPriceDataCanceled['DUTY_AND_TAX']) + (itemPriceDataCanceled['WAYPOINT_FEE'] ?? 0) + (itemPriceDataCanceled['ADDITIONAL_FEE'] || 0) + itemPriceDataCanceled['FETCHING_FEE']
 
 			let coupon = 0, point = 0
 
@@ -463,12 +417,13 @@ export class OrderPredictionFeed implements iFeed {
 
 			const data = {
 				주문일: DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
-				'주문 상태': status,
+				'주문 상태': row.itemOrderStatus,
 				'상품별 주문번호': row.itemOrderNumber,
 				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
 				'전체 주문번호': row.fetching_order_number,
+				'전체 주문 상태': Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', '),
 				'편집샵 매입 주문번호': row.vendorOrderNumber,
-				// '카드사': '롯데카드',
+				'카드사': '롯데카드',
 				'운송 업체': row.shippingCompany,
 				'운송장 번호': row.invoice,
 				'배송 유형': row.deliveryMethod,
@@ -487,11 +442,11 @@ export class OrderPredictionFeed implements iFeed {
 				'실 결제 금액': row.payAmount,
 				'결제 환불 금액': refundAmount,
 				'PG수수료 환불': refundPgFee,
-				// '국내 반품 비용': '',
+				'국내 반품 비용': row.returnFee,
 				// 'IBP 반품 비용': '',
 				// '보상 적립금': '',
 				// '수선 비용': '',
-				'매입 환출 금액': (cancelCount || returnCount) && row.vendorOrderNumber ? Math.abs(lCardRefundValue) : 0, // -cardRefundValue,
+				'매입 환출 금액': (cancelCount || returnCount) ? Math.abs(lCardRefundValue) : 0, // -cardRefundValue,
 			}
 
 			return data
@@ -505,12 +460,13 @@ export class OrderPredictionFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key])) continue
+					if (['카드사'].includes(key)) continue
+					if (['수동 확인 필요'].includes(feed[i][key])) continue
+					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key]) && rows[i][key] === '' && (isNil(feed[i][key]) || feed[i][key] === '')) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
-					console.log(key, feed[i][key])
 					const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
 
 					if (cell?.effectiveFormat?.backgroundColor) {
