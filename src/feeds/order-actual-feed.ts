@@ -359,6 +359,7 @@ export class OrderActualFeed implements iFeed {
                  so.is_ddp_service                                            AS isDDP,
                  weight                                                       AS weight,
                  imc.idx                                                      AS ibpManageCode,
+                 iocm.amount                                                  AS affiliateFee,
                  CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
                  (SELECT u.name
                   FROM commerce.fetching_order_memo fom
@@ -385,6 +386,7 @@ export class OrderActualFeed implements iFeed {
                    JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
                    LEFT JOIN commerce.item_order_weight iow ON io.item_order_number = iow.item_order_number
               		 LEFT JOIN commerce.ibp_manage_code imc ON io.item_order_number = imc.item_order_number
+              		 LEFT JOIN commerce.item_order_commission_map iocm ON io.item_order_number = iocm.item_order_number
                    JOIN shop_price sp on so.shop_id = sp.idx
                    JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
                    JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
@@ -641,6 +643,7 @@ export class OrderActualFeed implements iFeed {
 				// '보상 적립금': '',
 				// '수선 비용': '',
 				'매입환출금액': -cardRefundValue,
+				'기타 수익': row.affiliateFee
 			}
 
 			return data
