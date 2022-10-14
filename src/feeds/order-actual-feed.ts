@@ -83,7 +83,8 @@ export class OrderActualFeed implements iFeed {
 		eldexRaw.forEach((row) => {
 			const id = row['송장번호']
 			const value = row['2차결제금액(원)'].replace(/,/g, '')
-			eldex[id] = parseInt(value)
+			const pgFee = row['PG수수료(원)'].replace(/,/g, '')
+			eldex[id] = parseInt(value) + parseInt(pgFee)
 		})
 
 		ibpRaw.forEach((row) => {
@@ -638,12 +639,13 @@ export class OrderActualFeed implements iFeed {
 				'PG수수료': pgFee,
 				'실 결제 금액': row.payAmount,
 				'환불금액': refundAmount,
+				// '반품 비용': '',
 				// '반품 배송비': '',
-				'반품 비용': row.returnFee,
 				// '보상 적립금': '',
 				// '수선 비용': '',
 				'매입환출금액': -cardRefundValue,
-				'기타 수익': row.affiliateFee
+				'반품 수수료': row.returnFee,
+				'제휴 수수료': row.affiliateFee
 			}
 
 			return data

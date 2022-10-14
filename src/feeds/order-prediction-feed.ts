@@ -215,6 +215,10 @@ export class OrderPredictionFeed implements iFeed {
                            JOIN shop_price sp2 ON so2.shop_id = sp2.idx
                            JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
                   WHERE io2.item_order_number = io.item_order_number)         AS itemPayAmountDetail,
+                 (SELECT SUM(amount)
+                  FROM commerce.order_additional_pay_item oapi
+                  WHERE oapi.item_order_number = io.item_order_number
+                    AND oapi.status = 'PAID')                                 AS additionalPayAmount,
                  io.inherited_shop_coupon_discount_amount                     AS inheritedShopCouponDiscountAmount,
                  io.inherited_order_coupon_discount_amount                    AS inheritedOrderCouponDiscountAmount,
                  io.inherited_order_use_point                                 AS inheritedOrderUsePoint,
@@ -223,7 +227,8 @@ export class OrderPredictionFeed implements iFeed {
                  fo.coupon_discount_amount                                    AS orderCouponDiscountAmount,
                  fo.use_point                                                 AS orderPointDiscountAmount,
                  so.is_ddp_service                                            AS isDDP,
-                 CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod
+                 CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
+                 iocm.amount                                                  AS affiliateFee
           FROM commerce.fetching_order fo
                    JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
                    JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
@@ -238,6 +243,7 @@ export class OrderPredictionFeed implements iFeed {
                    LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
                    LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
                    JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
+                   LEFT JOIN commerce.item_order_commission_map iocm ON io.item_order_number = iocm.item_order_number
                    JOIN shop_price sp on so.shop_id = sp.idx
                    JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
                    JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
@@ -247,7 +253,7 @@ export class OrderPredictionFeed implements iFeed {
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
             AND (
-                      (fo.created_at + INTERVAL 9 HOUR) >= '2022-09-20'
+              (fo.created_at + INTERVAL 9 HOUR) >= '2022-09-20'
               )
           GROUP BY io.item_order_number
           ORDER BY fo.created_at ASC
@@ -432,9 +438,10 @@ export class OrderPredictionFeed implements iFeed {
 				'결제 방식': row.pay_method,
 				'상품명': row.itemName,
 				'수량': row.quantity,
-				'편집샵 결제가': purchaseValue, // cardPurchaseValue,
-				'관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']), // taxTotal
-				'운송료': itemPriceData['ADDITIONAL_FEE'] || 0, // waypointDeliveryFee
+				'상품 원가': purchaseValue,
+				'차액 결제 금액': row.additionalPayAmount,
+				'관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']),
+				'운송료': itemPriceData['ADDITIONAL_FEE'] || 0,
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
 				'쿠폰': coupon,
 				'적립금': point,
@@ -442,11 +449,13 @@ export class OrderPredictionFeed implements iFeed {
 				'실 결제 금액': row.payAmount,
 				'결제 환불 금액': refundAmount,
 				'PG수수료 환불': refundPgFee,
-				'국내 반품 비용': row.returnFee,
+				// '국내 반품 비용': '',
 				// 'IBP 반품 비용': '',
 				// '보상 적립금': '',
 				// '수선 비용': '',
 				'매입 환출 금액': (cancelCount || returnCount) ? Math.abs(lCardRefundValue) : 0, // -cardRefundValue,
+				'반품 수수료': row.returnFee,
+				'제휴 수수료': ''
 			}
 
 			return data
