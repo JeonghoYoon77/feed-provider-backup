@@ -439,7 +439,7 @@ export class OrderPredictionFeed implements iFeed {
 				'상품명': row.itemName,
 				'수량': row.quantity,
 				'상품 원가': purchaseValue,
-				'차액 결제 금액': row.additionalPayAmount,
+				'차액 결제 금액': parseInt(row.additionalPayAmount) || 0,
 				'관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']),
 				'운송료': itemPriceData['ADDITIONAL_FEE'] || 0,
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
