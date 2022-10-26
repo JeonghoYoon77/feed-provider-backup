@@ -86,8 +86,12 @@ export class OrderPredictionFeed implements iFeed {
                  (
                      SELECT JSON_ARRAYAGG(
                                     case
-                                        when ori2.return_item_number is not null
+                                        when ori2.status = 'ACCEPT'
                                             then '반품'
+                                        when ori2.status = 'IN_PROGRESS'
+                                            then '반품 진행 중'
+                                        when ori2.status = 'HOLD'
+                                            then '반품 보류'
                                         when oci2.cancel_item_number is not null
                                             then '주문 취소'
                                         when fo.status = 'COMPLETE'
@@ -133,7 +137,7 @@ export class OrderPredictionFeed implements iFeed {
                                            oci2.status = 'ACCEPT'
                               left join commerce.order_return_item ori2
                                         on io2.item_order_number = ori2.item_order_number AND
-                                           ori2.status = 'ACCEPT'
+                                           ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT')
                      WHERE so2.fetching_order_number = fo.fetching_order_number
                  )                                                            AS itemStatusList,
                  ssi.customer_negligence_return_fee                           AS returnFee,
@@ -448,6 +452,7 @@ export class OrderPredictionFeed implements iFeed {
 				'PG수수료': pgFee,
 				'실 결제 금액': row.payAmount,
 				'결제 환불 금액': refundAmount,
+				'관부가세 환급': (cancelCount || returnCount) ? (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']) : 0,
 				'PG수수료 환불': refundPgFee,
 				// '국내 반품 비용': '',
 				// 'IBP 반품 비용': '',

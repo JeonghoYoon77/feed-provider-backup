@@ -17,9 +17,6 @@ export class OrderActualFeed implements iFeed {
 
 	async getTsv(): Promise<string> {
 		// 재무 시트
-		const doc = new GoogleSpreadsheet(
-			'1vXugfbFOQ_aCKtYLWX0xalKF7BJ1IPDzU_1kcAFAEu0'
-		)
 		const taxDoc = new GoogleSpreadsheet(
 			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU'
 		)
@@ -28,10 +25,6 @@ export class OrderActualFeed implements iFeed {
 		)
 
 		/* eslint-disable camelcase */
-		await doc.useServiceAccountAuth({
-			client_email: sheetData.client_email,
-			private_key: sheetData.private_key,
-		})
 		await taxDoc.useServiceAccountAuth({
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
@@ -42,11 +35,10 @@ export class OrderActualFeed implements iFeed {
 		})
 		/* eslint-enable camelcase */
 
-		await doc.loadInfo()
 		await taxDoc.loadInfo()
 		await targetDoc.loadInfo()
 
-		let cardCompanySheet = targetDoc.sheetsById[1873303120]
+		let cardCompanySheet = targetDoc.sheetsById[1341988301]
 
 		const cardCompanyRaw = await cardCompanySheet.getRows()
 
@@ -56,9 +48,8 @@ export class OrderActualFeed implements iFeed {
 			cardCompany[row['상품별 주문번호']] = row['카드사']
 		})
 
-		const eldexSheet = doc.sheetsByTitle['엘덱스비용'] // 엘덱스비용
 		const ibpSheet = targetDoc.sheetsById['325601058'] // IBP 배송 비용
-		// const eldexSheet = targetDoc.sheetsById['980121221'] // 엘덱스 배송 비용
+		const eldexSheet = targetDoc.sheetsById['980121221'] // 엘덱스 배송 비용
 		const lotteCardSheet = targetDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
 		const lotteCardExtraSheet = targetDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
 		const samsungCardSheet = targetDoc.sheetsById['880709363'] // 삼성카드 매출내역
@@ -89,7 +80,7 @@ export class OrderActualFeed implements iFeed {
 
 		ibpRaw.forEach((row) => {
 			if (row['관리번호']) {
-				const id = parseInt(row['관리번호'].replace(/[^\d]/g, ''))
+				const id = parseInt(row['관리번호'].replace(/\D/g, ''))
 				let value = parseInt(row['중량'])
 				if (value < 1) value = 1
 				value = Math.ceil(value / 0.5)
@@ -354,9 +345,10 @@ export class OrderActualFeed implements iFeed {
                          select 1
                          from commerce.order_refund refund
                          where 1 = 1
-                           and refund.status = 'ACCEPT'
+                           and refund.tax_refund_status = 'ACCEPT'
                            and refund.fetching_order_number = fo.fetching_order_number
                      )                                                        AS taxRefunded,
+              	 iot.total_tax                                                AS totalTax,
                  so.is_ddp_service                                            AS isDDP,
                  weight                                                       AS weight,
                  imc.idx                                                      AS ibpManageCode,
@@ -385,6 +377,7 @@ export class OrderActualFeed implements iFeed {
                    LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
                    JOIN commerce.user u on fo.user_id = u.idx
                    JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
+              		 LEFT JOIN commerce.item_order_tax iot ON io.item_order_number = iot.item_order_number
                    LEFT JOIN commerce.item_order_weight iow ON io.item_order_number = iow.item_order_number
               		 LEFT JOIN commerce.ibp_manage_code imc ON io.item_order_number = imc.item_order_number
               		 LEFT JOIN commerce.item_order_commission_map iocm ON io.item_order_number = iocm.item_order_number
@@ -584,9 +577,9 @@ export class OrderActualFeed implements iFeed {
 			let waypointDeliveryFee = parseInt(eldex[row.invoice] ?? '0')
 
 			if (row.ibpManageCode) {
-				waypointDeliveryFee = (ibp[row.ibpManageCode] ?? 0) * currencyRate
+				waypointDeliveryFee = Math.round((ibp[row.ibpManageCode] ?? 0) * currencyRate)
 			} else if (row.weight) {
-				waypointDeliveryFee = parseFloat(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
+				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			}
 
 			let coupon = 0, point = 0
@@ -619,8 +612,8 @@ export class OrderActualFeed implements iFeed {
 				'상품별 주문번호': row.itemOrderNumber,
 				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
 				'전체 주문번호': row.fetching_order_number,
-				// '전체 주문 상태': Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', '),
-				'편집샵 주문번호': row.vendorOrderNumber,
+				'전체 주문 상태': Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', '),
+				'편집샵 매입 주문번호': row.vendorOrderNumber,
 				'카드사': '롯데카드',
 				'운송 업체': row.shippingCompany,
 				'운송장 번호': row.invoice,
@@ -638,12 +631,14 @@ export class OrderActualFeed implements iFeed {
 				'적립금': point,
 				'PG수수료': pgFee,
 				'실 결제 금액': row.payAmount,
-				'환불금액': refundAmount,
+				'결제 환불 금액': refundAmount,
+				'관부가세 환급': refundAmount && cardPurchaseValue ? row.totalTax : 0,
+				'PG수수료 환불': refundPgFee,
 				// '반품 비용': '',
 				// '반품 배송비': '',
 				// '보상 적립금': '',
 				// '수선 비용': '',
-				'매입환출금액': -cardRefundValue,
+				'매입 환출 금액': -cardRefundValue,
 				'반품 수수료': row.returnFee,
 				'제휴 수수료': row.affiliateFee
 			}
@@ -651,7 +646,7 @@ export class OrderActualFeed implements iFeed {
 			return data
 		})
 
-		let targetSheet = targetDoc.sheetsById[1873303120]
+		let targetSheet = targetDoc.sheetsById[1341988301]
 		const rows = await targetSheet.getRows()
 		// @ts-ignore
 		await targetSheet.loadCells()
@@ -666,6 +661,7 @@ export class OrderActualFeed implements iFeed {
 					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
+					console.log(rows[i].rowIndex - 1, key, targetSheet.headerValues.indexOf(key))
 					const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
 
 					if (cell?.effectiveFormat?.backgroundColor) {
