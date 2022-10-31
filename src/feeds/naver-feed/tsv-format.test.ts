@@ -17,6 +17,7 @@ describe('TSVFormat', () => {
 
 			it('returns includes text "남성"', async () => {
 				const title = await tsvFormat.title({
+					idx: 0,
 					shopId: 1,
 					mainName: givenMainName,
 					brandName: givenMainName,
@@ -37,6 +38,7 @@ describe('TSVFormat', () => {
 
 			it('returns includes text "여성" and with color', async () => {
 				const title = await tsvFormat.title({
+					idx: 0,
 					shopId: 1,
 					mainName: givenMainName,
 					brandName: givenMainName,
