@@ -174,6 +174,7 @@ export class NaverFeed implements iFeed {
 			shopId: row.shop_id,
 		})
 		const title: string = await tsvFormat.title({
+			idx: row.id,
 			shopId: row.shop_id,
 			itemCode: row.item_code,
 			mainName: row.main_name,
