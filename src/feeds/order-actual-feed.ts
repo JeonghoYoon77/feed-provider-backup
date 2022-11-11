@@ -11,11 +11,15 @@ import {MySQL, S3Client} from '../utils'
 import {iFeed} from './feed'
 
 export class OrderActualFeed implements iFeed {
-	async getTsvBuffer(): Promise<Buffer> {
-		return Buffer.from(await this.getTsv(), 'utf-8')
+	async getTsvBufferWithRange(start: Date, end: Date, targetSheetId = null): Promise<Buffer> {
+		return Buffer.from(await this.getTsv({start, end, targetSheetId}), 'utf-8')
 	}
 
-	async getTsv(): Promise<string> {
+	async getTsvBuffer(): Promise<Buffer> {
+		return Buffer.from(await this.getTsv({start: null, end: null}), 'utf-8')
+	}
+
+	async getTsv({start, end, targetSheetId}: { start: Date, end: Date, targetSheetId?: string }): Promise<string> {
 		// 재무 시트
 		const taxDoc = new GoogleSpreadsheet(
 			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU'
@@ -38,7 +42,7 @@ export class OrderActualFeed implements iFeed {
 		await taxDoc.loadInfo()
 		await targetDoc.loadInfo()
 
-		let cardCompanySheet = targetDoc.sheetsById[1341988301]
+		let cardCompanySheet = targetDoc.sheetsById[targetSheetId]
 
 		const cardCompanyRaw = await cardCompanySheet.getRows()
 
@@ -390,13 +394,14 @@ export class OrderActualFeed implements iFeed {
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
             AND (
-                      (fo.created_at + INTERVAL 9 HOUR) >= '2022-09-20'
+                      (fo.created_at + INTERVAL 9 HOUR) >= ?
                   AND
-                      (fo.created_at + INTERVAL 9 HOUR) < '2022-09-28'
+                      (fo.created_at + INTERVAL 9 HOUR) < ?
               )
           GROUP BY io.item_order_number
           ORDER BY fo.created_at ASC
-			`
+			`,
+			[start, end]
 		)
 
 		const [{currencyRate}] = await MySQL.execute(`
@@ -584,18 +589,20 @@ export class OrderActualFeed implements iFeed {
 
 			let coupon = 0, point = 0
 
-			if (isNil(row.itemCouponDiscountAmount)) {
+			if (!isNil(row.itemCouponDiscountAmount)) {
 				coupon += row.itemCouponDiscountAmount
 			}
 
 			if (isNil(row.inheritedShopCouponDiscountAmount)) {
-				coupon += Calculate.cut(row.shopCouponDiscountAmount * (row.originAmount / (row.shopOriginAmount ?? row.fullShopOriginAmount)), 1)
+				const shopCouponDiscountAmount = Calculate.cut(row.shopCouponDiscountAmount * (row.originAmount / (row.shopOriginAmount ?? row.fullShopOriginAmount)), 1)
+				if (shopCouponDiscountAmount) coupon += shopCouponDiscountAmount
 			} else {
 				coupon += row.inheritedShopCouponDiscountAmount
 			}
 
 			if (isNil(row.inheritedOrderCouponDiscountAmount)) {
-				coupon += Calculate.cut(row.orderCouponDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)), 1)
+				const orderCouponDiscountAmount = Calculate.cut(row.orderCouponDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)), 1)
+				if (orderCouponDiscountAmount) coupon += orderCouponDiscountAmount
 			} else {
 				coupon += row.inheritedOrderCouponDiscountAmount
 			}
@@ -646,7 +653,7 @@ export class OrderActualFeed implements iFeed {
 			return data
 		})
 
-		let targetSheet = targetDoc.sheetsById[1341988301]
+		let targetSheet = targetDoc.sheetsById[targetSheetId]
 		const rows = await targetSheet.getRows()
 		// @ts-ignore
 		await targetSheet.loadCells()
@@ -661,7 +668,6 @@ export class OrderActualFeed implements iFeed {
 					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
 
-					console.log(rows[i].rowIndex - 1, key, targetSheet.headerValues.indexOf(key))
 					const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
 
 					if (cell?.effectiveFormat?.backgroundColor) {
@@ -669,6 +675,8 @@ export class OrderActualFeed implements iFeed {
 						if (!(red === 1 && green === 1 && blue === 1)) continue
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
+
+					console.log(key, feed[i]['상품별 주문번호'], feed[i][key])
 
 					cell.value = feed[i][key]
 					hasModified = true
@@ -694,6 +702,134 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		await this.getTsvBuffer()
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '1월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-01-01T00:00:00.000Z'),
+					new Date('2022-02-01T00:00:00.000Z'),
+					'774838589'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-02-01T00:00:00.000Z'),
+					new Date('2022-03-01T00:00:00.000Z'),
+					'2101667691'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '3월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-03-01T00:00:00.000Z'),
+					new Date('2022-04-01T00:00:00.000Z'),
+					'817260753'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '4월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-04-01T00:00:00.000Z'),
+					new Date('2022-05-01T00:00:00.000Z'),
+					'1404102642'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '5월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-05-01T00:00:00.000Z'),
+					new Date('2022-06-01T00:00:00.000Z'),
+					'36278530'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '6월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-06-01T00:00:00.000Z'),
+					new Date('2022-07-01T00:00:00.000Z'),
+					'989247431'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '7월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-07-01T00:00:00.000Z'),
+					new Date('2022-08-01T00:00:00.000Z'),
+					'311330949'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '8월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-08-01T00:00:00.000Z'),
+					new Date('2022-09-01T00:00:00.000Z'),
+					'104541007'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '9월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-09-01T00:00:00.000Z'),
+					new Date('2022-10-01T00:00:00.000Z'),
+					'563076916'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '10월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-10-01T00:00:00.000Z'),
+					new Date('2022-11-01T00:00:00.000Z'),
+					'551493946'
+				),
+				contentType: 'text/csv',
+			})
+		)
 	}
 }
