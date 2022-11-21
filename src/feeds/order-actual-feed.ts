@@ -189,70 +189,74 @@ export class OrderActualFeed implements iFeed {
                            JOIN commerce.item_order io ON so.shop_order_number = io.shop_order_number
                   WHERE fo2.fetching_order_number = fo.fetching_order_number) AS fullTotalOriginAmount,
                  fo.pay_amount                                                AS payAmount,
-                 (
-                     SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
-                     FROM commerce.order_additional_pay oap
-                              JOIN commerce.order_additional_pay_item oapi
-                                   ON oapi.order_additional_number = oap.order_additional_number AND
-                                      oapi.status = 'PAID'
-                     WHERE oap.fetching_order_number = fo.fetching_order_number
-                 )                                                            AS additionalPayInfo,
+                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
+                  FROM commerce.order_additional_pay oap
+                           JOIN commerce.order_additional_pay_item oapi
+                                ON oapi.order_additional_number = oap.order_additional_number AND
+                                   oapi.status = 'PAID'
+                  WHERE oap.fetching_order_number = fo.fetching_order_number) AS additionalPayInfo,
                  fo.status,
                  fo.order_path,
                  fo.pay_method,
-                 (
-                     SELECT JSON_ARRAYAGG(
-                                    case
-                                        when ori2.return_item_number is not null
-                                            then '반품'
-                                        when oci2.cancel_item_number is not null
-                                            then '주문 취소'
-                                        when fo.status = 'COMPLETE'
-                                            then '구매 확정'
-                                        when io.status in ('SHIPPING_COMPLETE')
-                                            then '배송 완료'
-                                        when io.status in ('IN_DOMESTIC_SHIPPING')
-                                            then '국내 배송 중'
-                                        when io.status in ('CUSTOMS_CLEARANCE_DELAY')
-                                            then '통관 지연'
-                                        when io.status in ('DOMESTIC_CUSTOMS_CLEARANCE')
-                                            then '국내 통관 중'
-                                        when io.status in ('WAYPOINT_ARRIVAL')
-                                            then '경유지 도착'
-                                        when io.status in ('IN_WAYPOINT_SHIPPING')
-                                            then '경유지 배송 중'
-                                        when io.status in ('SHIPPING_START')
-                                            then '배송 시작'
-                                        when io.status in ('PRODUCT_PREPARE')
-                                            then '상품 준비 중'
-                                        when io.status in ('ORDER_DELAY_IN_SHOP')
-                                            then '주문 지연'
-                                        when io.status in ('ORDER_COMPLETE')
-                                            then '발주 완료'
-                                        when io.status in ('ORDER_DELAY')
-                                            then '발주 지연'
-                                        when io.status in ('PRE_ORDER_REQUIRED')
-                                            then '선 발주 필요'
-                                        when io.status in ('ORDER_WAITING')
-                                            then '발주 대기'
-                                        when io.status in ('ORDER_AVAILABLE')
-                                            then '신규 주문'
-                                        when io.status in ('BEFORE_DEPOSIT')
-                                            then '입금 전 주문'
-                                        else ''
-                                        end
-                                )
-                     FROM commerce.item_order io2
-                              inner join commerce.shop_order so2
-                                         on so2.shop_order_number = io2.shop_order_number
-                              left join commerce.order_cancel_item oci2
-                                        on io2.item_order_number = oci2.item_order_number AND
-                                           oci2.status = 'ACCEPT'
-                              left join commerce.order_return_item ori2
-                                        on io2.item_order_number = ori2.item_order_number AND
-                                           ori2.status = 'ACCEPT'
-                     WHERE so2.fetching_order_number = fo.fetching_order_number
-                 )                                                            AS itemStatusList,
+                 (SELECT JSON_ARRAYAGG(
+                                 case
+                                     when ori2.return_item_number is not null
+                                         then '반품'
+                                     when oci2.cancel_item_number is not null
+                                         then '주문 취소'
+                                     when fo.status = 'COMPLETE'
+                                         then '구매 확정'
+                                     when io.status in ('SHIPPING_COMPLETE')
+                                         then '배송 완료'
+                                     when io.status in ('IN_DOMESTIC_SHIPPING')
+                                         then '국내 배송 중'
+                                     when io.status in ('CUSTOMS_CLEARANCE_DELAY')
+                                         then '통관 지연'
+                                     when io.status in ('DOMESTIC_CUSTOMS_CLEARANCE')
+                                         then '국내 통관 중'
+                                     when io.status in ('WAYPOINT_ARRIVAL')
+                                         then '경유지 도착'
+                                     when io.status in ('IN_WAYPOINT_SHIPPING')
+                                         then '경유지 배송 중'
+                                     when io.status in ('SHIPPING_START')
+                                         then '배송 시작'
+                                     when io.status in ('PRODUCT_PREPARE')
+                                         then '상품 준비 중'
+                                     when io.status in ('ORDER_DELAY_IN_SHOP')
+                                         then '주문 지연'
+                                     when io.status in ('ORDER_COMPLETE')
+                                         then '발주 완료'
+                                     when io.status in ('ORDER_DELAY')
+                                         then '발주 지연'
+                                     when io.status in ('PRE_ORDER_REQUIRED')
+                                         then '선 발주 필요'
+                                     when io.status in ('ORDER_WAITING')
+                                         then '발주 대기'
+                                     when io.status in ('ORDER_AVAILABLE')
+                                         then '신규 주문'
+                                     when io.status in ('BEFORE_DEPOSIT')
+                                         then '입금 전 주문'
+                                     else ''
+                                     end
+                             )
+                  FROM commerce.item_order io2
+                           inner join commerce.shop_order so2
+                                      on so2.shop_order_number = io2.shop_order_number
+                           left join commerce.order_cancel_item oci2
+                                     on io2.item_order_number = oci2.item_order_number AND
+                                        oci2.status = 'ACCEPT'
+                           left join commerce.order_return_item ori2
+                                     on io2.item_order_number = ori2.item_order_number AND
+                                        ori2.status = 'ACCEPT'
+                  WHERE so2.fetching_order_number = fo.fetching_order_number) AS itemStatusList,
+              	 COALESCE(oretec_D.extra_charge, 0)                           AS domesticExtraCharge,
+                 COALESCE(oretec_O.extra_charge, 0)                           AS overseasExtraCharge,
+                 COALESCE(oretec_R.extra_charge, 0)                           AS repairExtraCharge,
+                 (SELECT SUM(point_total)
+                  FROM commerce.user_point up
+                  WHERE up.user_id = fo.user_id
+                    AND up.fetching_order_number = fo.fetching_order_number
+                    AND up.save_type IN ('SERVICE_ISSUE', 'DELIVERY_ISSUE'))  AS pointByIssue,
                  ssi.customer_negligence_return_fee                           AS returnFee,
                  oret.reason_type                                             AS returnReason,
                  case
@@ -352,7 +356,7 @@ export class OrderActualFeed implements iFeed {
                            and refund.tax_refund_status = 'ACCEPT'
                            and refund.fetching_order_number = fo.fetching_order_number
                      )                                                        AS taxRefunded,
-              	 iot.total_tax                                                AS totalTax,
+                 iot.total_tax                                                AS totalTax,
                  so.is_ddp_service                                            AS isDDP,
                  weight                                                       AS weight,
                  imc.idx                                                      AS ibpManageCode,
@@ -366,38 +370,39 @@ export class OrderActualFeed implements iFeed {
                   ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
                   LIMIT 1)                                                    AS assignee
           FROM commerce.fetching_order fo
-                   JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
-                   JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
-                   LEFT JOIN commerce.order_cancel_item oci
-                             on io.item_order_number = oci.item_order_number AND oci.status = 'ACCEPT'
-                   LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
-                   LEFT JOIN commerce.order_return_item oreti
-                             on oreti.item_order_number = io.item_order_number AND oreti.status = 'ACCEPT'
-                   LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
-                   LEFT JOIN commerce.order_refund_item orefi
-                             on orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT'
-                   LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
-                   LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
-                   LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
-                   JOIN commerce.user u on fo.user_id = u.idx
-                   JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
-              		 LEFT JOIN commerce.item_order_tax iot ON io.item_order_number = iot.item_order_number
-                   LEFT JOIN commerce.item_order_weight iow ON io.item_order_number = iow.item_order_number
-              		 LEFT JOIN commerce.ibp_manage_code imc ON io.item_order_number = imc.item_order_number
-              		 LEFT JOIN commerce.item_order_commission_map iocm ON io.item_order_number = iocm.item_order_number
-                   JOIN shop_price sp on so.shop_id = sp.idx
-                   JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
-                   JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
-                   LEFT JOIN brand_info bi on ii.brand_id = bi.brand_id
-                   LEFT JOIN item_original_name ion on ii.idx = ion.item_id
-                   LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
+              JOIN commerce.shop_order so
+          ON fo.fetching_order_number = so.fetching_order_number
+              JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
+              LEFT JOIN commerce.order_cancel_item oci ON io.item_order_number = oci.item_order_number AND oci.status = 'ACCEPT'
+              LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
+              LEFT JOIN commerce.order_return_item oreti ON oreti.item_order_number = io.item_order_number AND oreti.status = 'ACCEPT'
+              LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
+              LEFT JOIN commerce.order_return_extra_charge oretec_D ON oretec_D.order_return_number = oret.order_return_number AND oretec_D.reason_type = 'DOMESTIC_RETURN'
+              LEFT JOIN commerce.order_return_extra_charge oretec_O ON oretec_O.order_return_number = oret.order_return_number AND oretec_O.reason_type = 'OVERSEAS_RETURN'
+              LEFT JOIN commerce.order_return_extra_charge oretec_R ON oretec_R.order_return_number = oret.order_return_number AND oretec_R.reason_type = 'REPAIR'
+              LEFT JOIN commerce.order_refund_item orefi ON orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT'
+              LEFT JOIN commerce.order_refund oref ON orefi.order_refund_number = oref.order_refund_number
+              LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
+              LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
+              JOIN commerce.user u ON fo.user_id = u.idx
+              JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
+              LEFT JOIN commerce.item_order_tax iot ON io.item_order_number = iot.item_order_number
+              LEFT JOIN commerce.item_order_weight iow ON io.item_order_number = iow.item_order_number
+              LEFT JOIN commerce.ibp_manage_code imc ON io.item_order_number = imc.item_order_number
+              LEFT JOIN commerce.item_order_commission_map iocm ON io.item_order_number = iocm.item_order_number
+              JOIN shop_price sp ON so.shop_id = sp.idx
+              JOIN fetching_dev.item_info ii ON ii.idx = io.item_id
+              JOIN fetching_dev.shop_info si ON sp.shop_id = si.shop_id
+              LEFT JOIN brand_info bi ON ii.brand_id = bi.brand_id
+              LEFT JOIN item_original_name ion on ii.idx = ion.item_id
+              LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
             AND (
-                      (fo.created_at + INTERVAL 9 HOUR) >= ?
-                  AND
-                      (fo.created_at + INTERVAL 9 HOUR) < ?
-              )
+              (fo.created_at + INTERVAL 9 HOUR) >= ?
+            AND
+              (fo.created_at + INTERVAL 9 HOUR) < ?
+            )
           GROUP BY io.item_order_number
           ORDER BY fo.created_at ASC
 			`,
@@ -459,7 +464,7 @@ export class OrderActualFeed implements iFeed {
 
 			if (row.additionalPayInfo) {
 				for (const {amount, method} of row.additionalPayInfo) {
-					row.payAmount += amount
+					row.additionalPayAmount += amount
 					if (method === 'CARD') pgFee += Math.round(amount * 0.014)
 					else if (method === 'KAKAO') pgFee += Math.round(amount * 0.015)
 					else if (method === 'NAVER') pgFee += Math.round(amount * 0.015)
@@ -631,20 +636,21 @@ export class OrderActualFeed implements iFeed {
 				'상품명': row.itemName,
 				'수량': row.quantity,
 				'상품 원가': cardPurchaseValue,
+				'부가세 환급': itemPriceData['DEDUCTED_VAT'],
 				'관부가세': taxTotal,
 				'운송료': waypointDeliveryFee,
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
 				'쿠폰': coupon,
 				'적립금': point,
-				'PG수수료': pgFee,
+				'PG수수료': pgFee - refundPgFee,
 				'실 결제 금액': row.payAmount,
+				'추가 결제 금액': row.additionalPayAmount,
 				'결제 환불 금액': refundAmount,
 				'관부가세 환급': refundAmount && cardPurchaseValue ? row.totalTax : 0,
-				'PG수수료 환불': refundPgFee,
-				// '반품 비용': '',
-				// '반품 배송비': '',
-				// '보상 적립금': '',
-				// '수선 비용': '',
+				'국내 반품 비용': row.domesticExtraCharge,
+				'해외 반품 비용': row.overseasExtraCharge,
+				'보상 적립금': row.pointByIssue,
+				'수선 비용': row.repairExtraCharge,
 				'매입 환출 금액': -cardRefundValue,
 				'반품 수수료': row.returnFee,
 				'제휴 수수료': row.affiliateFee
@@ -722,7 +728,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-02-01T00:00:00.000Z'),
 					new Date('2022-03-01T00:00:00.000Z'),
-					'2101667691'
+					'1950994764'
 				),
 				contentType: 'text/csv',
 			})
@@ -735,7 +741,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-03-01T00:00:00.000Z'),
 					new Date('2022-04-01T00:00:00.000Z'),
-					'817260753'
+					'330893985'
 				),
 				contentType: 'text/csv',
 			})
@@ -748,7 +754,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-04-01T00:00:00.000Z'),
 					new Date('2022-05-01T00:00:00.000Z'),
-					'1404102642'
+					'2089161848'
 				),
 				contentType: 'text/csv',
 			})
@@ -761,7 +767,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-05-01T00:00:00.000Z'),
 					new Date('2022-06-01T00:00:00.000Z'),
-					'36278530'
+					'1009926644'
 				),
 				contentType: 'text/csv',
 			})
@@ -774,7 +780,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-06-01T00:00:00.000Z'),
 					new Date('2022-07-01T00:00:00.000Z'),
-					'989247431'
+					'1304014481'
 				),
 				contentType: 'text/csv',
 			})
@@ -787,7 +793,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-07-01T00:00:00.000Z'),
 					new Date('2022-08-01T00:00:00.000Z'),
-					'311330949'
+					'437467632'
 				),
 				contentType: 'text/csv',
 			})
@@ -800,7 +806,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-08-01T00:00:00.000Z'),
 					new Date('2022-09-01T00:00:00.000Z'),
-					'104541007'
+					'241586790'
 				),
 				contentType: 'text/csv',
 			})
@@ -813,7 +819,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-09-01T00:00:00.000Z'),
 					new Date('2022-10-01T00:00:00.000Z'),
-					'563076916'
+					'1947643951'
 				),
 				contentType: 'text/csv',
 			})
@@ -826,7 +832,7 @@ export class OrderActualFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-10-01T00:00:00.000Z'),
 					new Date('2022-11-01T00:00:00.000Z'),
-					'551493946'
+					'147779322'
 				),
 				contentType: 'text/csv',
 			})

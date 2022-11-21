@@ -144,6 +144,14 @@ export class OrderPredictionFeed implements iFeed {
                                            ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT')
                      WHERE so2.fetching_order_number = fo.fetching_order_number
                  )                                                            AS itemStatusList,
+                 COALESCE(oretec_D.extra_charge, 0)                           AS domesticExtraCharge,
+                 COALESCE(oretec_O.extra_charge, 0)                           AS overseasExtraCharge,
+                 COALESCE(oretec_R.extra_charge, 0)                           AS repairExtraCharge,
+                 (SELECT SUM(point_total)
+                  FROM commerce.user_point up
+                  WHERE up.user_id = fo.user_id
+                    AND up.fetching_order_number = fo.fetching_order_number
+                    AND up.save_type IN ('SERVICE_ISSUE', 'DELIVERY_ISSUE'))  AS pointByIssue,
                  ssi.customer_negligence_return_fee                           AS returnFee,
                  oret.reason_type                                             AS returnReason,
                  case
@@ -223,10 +231,6 @@ export class OrderPredictionFeed implements iFeed {
                            JOIN shop_price sp2 ON so2.shop_id = sp2.idx
                            JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
                   WHERE io2.item_order_number = io.item_order_number)         AS itemPayAmountDetail,
-                 (SELECT SUM(amount)
-                  FROM commerce.order_additional_pay_item oapi
-                  WHERE oapi.item_order_number = io.item_order_number
-                    AND oapi.status = 'PAID')                                 AS additionalPayAmount,
                  io.inherited_shop_coupon_discount_amount                     AS inheritedShopCouponDiscountAmount,
                  io.inherited_order_coupon_discount_amount                    AS inheritedOrderCouponDiscountAmount,
                  io.inherited_order_use_point                                 AS inheritedOrderUsePoint,
@@ -246,6 +250,9 @@ export class OrderPredictionFeed implements iFeed {
                    LEFT JOIN commerce.order_return_item oreti
                              on oreti.item_order_number = io.item_order_number AND oreti.status = 'ACCEPT'
                    LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
+                   LEFT JOIN commerce.order_return_extra_charge oretec_D ON oretec_D.order_return_number = oret.order_return_number AND oretec_D.reason_type = 'DOMESTIC_RETURN'
+                   LEFT JOIN commerce.order_return_extra_charge oretec_O ON oretec_O.order_return_number = oret.order_return_number AND oretec_O.reason_type = 'OVERSEAS_RETURN'
+                   LEFT JOIN commerce.order_return_extra_charge oretec_R ON oretec_R.order_return_number = oret.order_return_number AND oretec_R.reason_type = 'REPAIR'
                    LEFT JOIN commerce.order_refund_item orefi
                              on orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT'
                    LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
@@ -274,6 +281,8 @@ export class OrderPredictionFeed implements iFeed {
 		const feed = data.map((row) => {
 			//row.itemOrderNumber = row.itemOrderNumber.map(itemOrder => [itemOrder.itemOrderNumber, itemOrder.orderedAt ? `(${DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss')})` : ''].join(' ').trim()).join(', ')
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
+			row.additionalPayAmount = 0
+
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001'
@@ -296,6 +305,7 @@ export class OrderPredictionFeed implements iFeed {
 			let cancelCount = statusCount['주문 취소'] ?? 0
 			let returnCount = statusCount['반품'] ?? 0
 
+
 			let pgFee = 0
 
 			if (row.pay_method === 'CARD') {
@@ -312,7 +322,7 @@ export class OrderPredictionFeed implements iFeed {
 
 			if (row.additionalPayInfo) {
 				for (const {amount, method} of row.additionalPayInfo) {
-					row.payAmount += amount
+					row.additionalPayAmount += amount
 					if (method === 'CARD') pgFee += Math.round(amount * 0.014)
 					else if (method === 'KAKAO') pgFee += Math.round(amount * 0.015)
 					else if (method === 'NAVER') pgFee += Math.round(amount * 0.015)
@@ -405,14 +415,10 @@ export class OrderPredictionFeed implements iFeed {
 				row.returnFee = 0
 			}
 
-			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
+			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0)
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (itemPriceDataCanceled['DUTY_AND_TAX']) + (itemPriceDataCanceled['WAYPOINT_FEE'] ?? 0) + (itemPriceDataCanceled['ADDITIONAL_FEE'] || 0) + itemPriceDataCanceled['FETCHING_FEE']
 
 			let coupon = 0, point = 0
-
-			if (row.itemOrderNumber === 'P-20220125-0000014') {
-				console.log(row.itemCouponDiscountAmount, row.shopCouponDiscountAmount, row.inheritedShopCouponDiscountAmount, row.orderCouponDiscountAmount, row.inheritedOrderCouponDiscountAmount)
-			}
 
 			if (!isNil(row.itemCouponDiscountAmount)) {
 				coupon += row.itemCouponDiscountAmount
@@ -456,21 +462,22 @@ export class OrderPredictionFeed implements iFeed {
 				'상품명': row.itemName,
 				'수량': row.quantity,
 				'상품 원가': purchaseValue,
-				'차액 결제 금액': parseInt(row.additionalPayAmount) || 0,
+				'부가세 환급': itemPriceData['DEDUCTED_VAT'],
 				'관부가세': (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']),
 				'운송료': itemPriceData['ADDITIONAL_FEE'] || 0,
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
+				'부가세 환급 수수료': itemPriceData['WAYPOINT_FEE'],
 				'쿠폰': coupon,
 				'적립금': point,
-				'PG수수료': pgFee,
+				'PG수수료': pgFee - refundPgFee,
 				'실 결제 금액': row.payAmount,
+				'차액 결제 금액': parseInt(row.additionalPayAmount) || 0,
 				'결제 환불 금액': refundAmount,
 				'관부가세 환급': (cancelCount || returnCount) ? (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']) : 0,
-				'PG수수료 환불': refundPgFee,
-				// '국내 반품 비용': '',
-				// 'IBP 반품 비용': '',
-				// '보상 적립금': '',
-				// '수선 비용': '',
+				'국내 반품 비용': row.domesticExtraCharge,
+				'해외 반품 비용': row.overseasExtraCharge,
+				'보상 적립금': row.pointByIssue,
+				'수선 비용': row.repairExtraCharge,
 				'매입 환출 금액': (cancelCount || returnCount) ? Math.abs(lCardRefundValue) : 0, // -cardRefundValue,
 				'반품 수수료': row.returnFee,
 				'제휴 수수료': ''
@@ -548,7 +555,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-02-01T00:00:00.000Z'),
 					new Date('2022-03-01T00:00:00.000Z'),
-					'874794911'
+					'601565629'
 				),
 				contentType: 'text/csv',
 			})
@@ -561,7 +568,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-03-01T00:00:00.000Z'),
 					new Date('2022-04-01T00:00:00.000Z'),
-					'1181432129'
+					'1426081800'
 				),
 				contentType: 'text/csv',
 			})
@@ -574,7 +581,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-04-01T00:00:00.000Z'),
 					new Date('2022-05-01T00:00:00.000Z'),
-					'1469564260'
+					'1475979426'
 				),
 				contentType: 'text/csv',
 			})
@@ -587,7 +594,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-05-01T00:00:00.000Z'),
 					new Date('2022-06-01T00:00:00.000Z'),
-					'138430318'
+					'2014184837'
 				),
 				contentType: 'text/csv',
 			})
@@ -600,7 +607,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-06-01T00:00:00.000Z'),
 					new Date('2022-07-01T00:00:00.000Z'),
-					'1707621899'
+					'1314596413'
 				),
 				contentType: 'text/csv',
 			})
@@ -613,7 +620,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-07-01T00:00:00.000Z'),
 					new Date('2022-08-01T00:00:00.000Z'),
-					'1307994268'
+					'325810291'
 				),
 				contentType: 'text/csv',
 			})
@@ -626,7 +633,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-08-01T00:00:00.000Z'),
 					new Date('2022-09-01T00:00:00.000Z'),
-					'734978288'
+					'1985712996'
 				),
 				contentType: 'text/csv',
 			})
@@ -639,7 +646,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-09-01T00:00:00.000Z'),
 					new Date('2022-10-01T00:00:00.000Z'),
-					'479850677'
+					'1195269707'
 				),
 				contentType: 'text/csv',
 			})
@@ -652,7 +659,7 @@ export class OrderPredictionFeed implements iFeed {
 				buffer: await this.getTsvBufferWithRange(
 					new Date('2022-10-01T00:00:00.000Z'),
 					new Date('2022-11-01T00:00:00.000Z'),
-					'1887072688'
+					'1680119655'
 				),
 				contentType: 'text/csv',
 			})
