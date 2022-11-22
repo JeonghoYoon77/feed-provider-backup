@@ -49,6 +49,8 @@ export class OrderPredictionFeed implements iFeed {
                  fo.fetching_order_number,
                  io.item_order_number                                         AS itemOrderNumber,
                  io.vendor_order_number                                       AS vendorOrderNumber,
+                 ccc.idx	                                      							AS cardCompanyName,
+                 ccc.name	                                      							AS cardCompanyName,
                  io.card_approval_number                                      AS cardApprovalNumber,
                  io.origin_amount                                             AS originAmount,
                  (SELECT SUM(io.origin_amount)
@@ -88,61 +90,65 @@ export class OrderPredictionFeed implements iFeed {
                  fo.order_path,
                  fo.pay_method,
                  (
-                     SELECT JSON_ARRAYAGG(
-                                    case
-                                        when ori2.status = 'ACCEPT'
-                                            then '반품'
-                                        when ori2.status = 'IN_PROGRESS'
-                                            then '반품 진행 중'
-                                        when ori2.status = 'HOLD'
-                                            then '반품 보류'
-                                        when oci2.cancel_item_number is not null
-                                            then '주문 취소'
-                                        when fo.status = 'COMPLETE'
-                                            then '구매 확정'
-                                        when io.status in ('SHIPPING_COMPLETE')
-                                            then '배송 완료'
-                                        when io.status in ('IN_DOMESTIC_SHIPPING')
-                                            then '국내 배송 중'
-                                        when io.status in ('CUSTOMS_CLEARANCE_DELAY')
-                                            then '통관 지연'
-                                        when io.status in ('DOMESTIC_CUSTOMS_CLEARANCE')
-                                            then '국내 통관 중'
-                                        when io.status in ('WAYPOINT_ARRIVAL')
-                                            then '경유지 도착'
-                                        when io.status in ('IN_WAYPOINT_SHIPPING')
-                                            then '경유지 배송 중'
-                                        when io.status in ('SHIPPING_START')
-                                            then '배송 시작'
-                                        when io.status in ('PRODUCT_PREPARE')
-                                            then '상품 준비 중'
-                                        when io.status in ('ORDER_DELAY_IN_SHOP')
-                                            then '주문 지연'
-                                        when io.status in ('ORDER_COMPLETE')
-                                            then '발주 완료'
-                                        when io.status in ('ORDER_DELAY')
-                                            then '발주 지연'
-                                        when io.status in ('PRE_ORDER_REQUIRED')
-                                            then '선 발주 필요'
-                                        when io.status in ('ORDER_WAITING')
-                                            then '발주 대기'
-                                        when io.status in ('ORDER_AVAILABLE')
-                                            then '신규 주문'
-                                        when io.status in ('BEFORE_DEPOSIT')
-                                            then '입금 전 주문'
-                                        else ''
-                                        end
-                                )
-                     FROM commerce.item_order io2
-                              inner join commerce.shop_order so2
-                                         on so2.shop_order_number = io2.shop_order_number
-                              left join commerce.order_cancel_item oci2
-                                        on io2.item_order_number = oci2.item_order_number AND
-                                           oci2.status = 'ACCEPT'
-                              left join commerce.order_return_item ori2
-                                        on io2.item_order_number = ori2.item_order_number AND
-                                           ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT')
-                     WHERE so2.fetching_order_number = fo.fetching_order_number
+                     SELECT JSON_ARRAYAGG(status)
+                     FROM (
+                              SELECT case
+                                         when ori2.status = 'ACCEPT'
+                                             then '반품'
+                                         when ori2.status = 'IN_PROGRESS'
+                                             then '반품 진행 중'
+                                         when ori2.status = 'HOLD'
+                                             then '반품 보류'
+                                         when oci2.cancel_item_number is not null
+                                             then '주문 취소'
+                                         when fo2.status = 'COMPLETE'
+                                             then '구매 확정'
+                                         when io2.status in ('ORDER_CONFIRM')
+                                             then '구매 확정'
+                                         when io2.status in ('SHIPPING_COMPLETE')
+                                             then '배송 완료'
+                                         when io2.status in ('IN_DOMESTIC_SHIPPING')
+                                             then '국내 배송 중'
+                                         when io2.status in ('CUSTOMS_CLEARANCE_DELAY')
+                                             then '통관 지연'
+                                         when io2.status in ('DOMESTIC_CUSTOMS_CLEARANCE')
+                                             then '국내 통관 중'
+                                         when io2.status in ('WAYPOINT_ARRIVAL')
+                                             then '경유지 도착'
+                                         when io2.status in ('IN_WAYPOINT_SHIPPING')
+                                             then '경유지 배송 중'
+                                         when io2.status in ('SHIPPING_START')
+                                             then '배송 시작'
+                                         when io2.status in ('PRODUCT_PREPARE')
+                                             then '상품 준비 중'
+                                         when io2.status in ('ORDER_DELAY_IN_SHOP')
+                                             then '주문 지연'
+                                         when io2.status in ('ORDER_COMPLETE')
+                                             then '발주 완료'
+                                         when io2.status in ('ORDER_DELAY')
+                                             then '발주 지연'
+                                         when io2.status in ('PRE_ORDER_REQUIRED')
+                                             then '선 발주 필요'
+                                         when io2.status in ('ORDER_WAITING')
+                                             then '발주 대기'
+                                         when io2.status in ('ORDER_AVAILABLE')
+                                             then '신규 주문'
+                                         when io2.status in ('BEFORE_DEPOSIT')
+                                             then '입금 전 주문'
+                                         else ''
+                                         end as status
+                              FROM commerce.item_order io2
+                                       inner join commerce.shop_order so2
+                                                  on so2.shop_order_number = io2.shop_order_number
+                                       INNER JOIN commerce.fetching_order fo2 ON so2.fetching_order_number = fo2.fetching_order_number
+                                       left join commerce.order_cancel_item oci2
+                                                 on io2.item_order_number = oci2.item_order_number AND
+                                                    oci2.status = 'ACCEPT'
+                                       left join commerce.order_return_item ori2
+                                                 on io2.item_order_number = ori2.item_order_number AND
+                                                    ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT')
+                              WHERE so2.fetching_order_number = fo.fetching_order_number
+                              GROUP BY io2.item_order_number) t
                  )                                                            AS itemStatusList,
                  COALESCE(oretec_D.extra_charge, 0)                           AS domesticExtraCharge,
                  COALESCE(oretec_O.extra_charge, 0)                           AS overseasExtraCharge,
@@ -160,6 +166,8 @@ export class OrderPredictionFeed implements iFeed {
                      when oci.cancel_item_number is not null
                          then '주문 취소'
                      when fo.status = 'COMPLETE'
+                         then '구매 확정'
+                     when io.status in ('ORDER_CONFIRM')
                          then '구매 확정'
                      when io.status in ('SHIPPING_COMPLETE')
                          then '배송 완료'
@@ -257,6 +265,7 @@ export class OrderPredictionFeed implements iFeed {
                              on orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT'
                    LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
                    LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
+              		 LEFT JOIN commerce.credit_card_company ccc ON ccc.idx = io.card_company_id
                    JOIN fetching_dev.delivery_method dm ON so.delivery_method = dm.idx
                    LEFT JOIN commerce.item_order_commission_map iocm ON io.item_order_number = iocm.item_order_number
                    JOIN shop_price sp on so.shop_id = sp.idx
@@ -452,7 +461,7 @@ export class OrderPredictionFeed implements iFeed {
 				'전체 주문번호': row.fetching_order_number,
 				'전체 주문 상태': Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', '),
 				'편집샵 매입 주문번호': row.vendorOrderNumber,
-				'카드사': '롯데카드',
+				'카드사': row.cardCompanyName,
 				'운송 업체': row.shippingCompany,
 				'운송장 번호': row.invoice,
 				'배송 유형': row.deliveryMethod,
@@ -494,7 +503,6 @@ export class OrderPredictionFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (['카드사'].includes(key)) continue
 					if (['수동 확인 필요'].includes(feed[i][key])) continue
 					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key]) && rows[i][key] === '' && (isNil(feed[i][key]) || feed[i][key] === '')) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
