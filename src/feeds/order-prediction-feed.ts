@@ -478,7 +478,7 @@ export class OrderPredictionFeed implements iFeed {
 				'해외 반품 비용': row.overseasExtraCharge,
 				'보상 적립금': row.pointByIssue,
 				'수선 비용': row.repairExtraCharge,
-				'매입 환출 금액': (cancelCount || returnCount) ? Math.abs(lCardRefundValue) : 0, // -cardRefundValue,
+				'매입 환출 금액': (cancelCount || returnCount) ? Math.abs(purchaseValue) : 0, // -cardRefundValue,
 				'반품 수수료': row.returnFee,
 				'제휴 수수료': ''
 			}
