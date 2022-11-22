@@ -453,6 +453,11 @@ export class OrderPredictionFeed implements iFeed {
 				point += row.inheritedOrderUsePoint
 			}
 
+			if (cancelCount || returnCount) {
+				coupon = 0
+				point = 0
+			}
+
 			const data = {
 				주문일: DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
 				'주문 상태': row.itemOrderStatus,

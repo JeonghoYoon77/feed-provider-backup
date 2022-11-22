@@ -24,12 +24,19 @@ export class OrderActualFeed implements iFeed {
 		const taxDoc = new GoogleSpreadsheet(
 			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU'
 		)
+		const vatRefundDoc = new GoogleSpreadsheet(
+			'1k2ZGGVr1blw8QF9fxQ-80mbgThq8mcFayfaWGRoWacY'
+		)
 		const targetDoc = new GoogleSpreadsheet(
 			'1hmp69Ej9Gr4JU1KJ6iHO-iv1Tga5lMyp8NO5-yRDMlU'
 		)
 
 		/* eslint-disable camelcase */
 		await taxDoc.useServiceAccountAuth({
+			client_email: sheetData.client_email,
+			private_key: sheetData.private_key,
+		})
+		await vatRefundDoc.useServiceAccountAuth({
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
 		})
@@ -41,16 +48,7 @@ export class OrderActualFeed implements iFeed {
 
 		await taxDoc.loadInfo()
 		await targetDoc.loadInfo()
-
-		let cardCompanySheet = targetDoc.sheetsById[targetSheetId]
-
-		const cardCompanyRaw = await cardCompanySheet.getRows()
-
-		const cardCompany = {}
-
-		cardCompanyRaw.forEach(row => {
-			cardCompany[row['상품별 주문번호']] = row['카드사']
-		})
+		await vatRefundDoc.loadInfo()
 
 		const ibpSheet = targetDoc.sheetsById['325601058'] // IBP 배송 비용
 		const eldexSheet = targetDoc.sheetsById['980121221'] // 엘덱스 배송 비용
@@ -68,12 +66,14 @@ export class OrderActualFeed implements iFeed {
 
 		const eldex = {}
 		const ibp = {}
+		const ibpFee = {}
 		const lotteCard = {}
 		const lotteCardExtra = {}
 		const lotteCardRefund = {}
 		const samsungCard = {}
 		const samsungCardRefund = {}
 		const tax = {}
+		const vatRefund = {}
 
 		eldexRaw.forEach((row) => {
 			const id = row['송장번호']
@@ -151,6 +151,19 @@ export class OrderActualFeed implements iFeed {
 				if (isCanceled) samsungCardRefund[id] = -value
 			}
 		})
+
+		for (const sheetId of Object.keys(vatRefundDoc.sheetsById)) {
+			const sheet = vatRefundDoc.sheetsById[sheetId]
+
+			const data = await sheet.getRows()
+			data.forEach(row => {
+				if (row['관리번호']) {
+					const id = parseInt(row['관리번호'].replace(/\D/g, ''))
+					vatRefund[id] = row['부가세 금액']
+					ibpFee[id] = row['IBP 수수료']
+				}
+			})
+		}
 
 		const data = await MySQL.execute(
 			`
@@ -432,6 +445,8 @@ export class OrderActualFeed implements iFeed {
 		const feed = data.map((row) => {
 			// row.itemOrderNumber = row.itemOrderNumber.map(itemOrder => [itemOrder.itemOrderNumber, itemOrder.orderedAt ? `(${DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss')})` : ''].join(' ').trim()).join(', ')
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
+			row.additionalPayAmount = 0
+
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001'
@@ -506,7 +521,7 @@ export class OrderActualFeed implements iFeed {
 			const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
 				const cardApprovalNumber = e.trim()
 
-				const refund = cardCompany[row.itemOrderNumber] === '삼성카드' ? samsungCardRefund[cardApprovalNumber] || 0 : lotteCardRefund[cardApprovalNumber] || 0
+				const refund = row.cardCompanyName === '삼성카드' ? samsungCardRefund[cardApprovalNumber] || 0 : lotteCardRefund[cardApprovalNumber] || 0
 
 				return refund + acc
 			}, 0)
@@ -515,7 +530,7 @@ export class OrderActualFeed implements iFeed {
 				const cardApprovalNumber = e.trim()
 
 				const value =
-					cardCompany[row.itemOrderNumber] === '삼성카드' ? samsungCard[cardApprovalNumber] : lotteCard[cardApprovalNumber] || lotteCardExtra[cardApprovalNumber] || 0
+					row.cardCompanyName === '삼성카드' ? samsungCard[cardApprovalNumber] : lotteCard[cardApprovalNumber] || lotteCardExtra[cardApprovalNumber] || 0
 
 				return value + acc
 			}, 0)
@@ -606,6 +621,18 @@ export class OrderActualFeed implements iFeed {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			}
 
+			let deductedVat = 0
+
+			if (row.ibpManageCode) {
+				deductedVat = Math.round((vatRefund[row.ibpManageCode] ?? 0) * currencyRate)
+			}
+
+			let waypointFee = 0
+
+			if (row.ibpManageCode) {
+				waypointFee = Math.round((ibpFee[row.ibpManageCode] ?? 0) * currencyRate)
+			}
+
 			let coupon = 0, point = 0
 
 			if (!isNil(row.itemCouponDiscountAmount)) {
@@ -650,15 +677,16 @@ export class OrderActualFeed implements iFeed {
 				'상품명': row.itemName,
 				'수량': row.quantity,
 				'상품 원가': cardPurchaseValue,
-				'부가세 환급': itemPriceData['DEDUCTED_VAT'],
+				'부가세 환급': deductedVat,
 				'관부가세': taxTotal,
 				'운송료': waypointDeliveryFee,
 				'페칭 수수료': itemPriceData['FETCHING_FEE'],
 				'쿠폰': coupon,
 				'적립금': point,
 				'PG수수료': pgFee - refundPgFee,
+				'부가세 환급 수수료': waypointFee,
 				'실 결제 금액': row.payAmount,
-				'추가 결제 금액': row.additionalPayAmount,
+				'차액 결제 금액': row.additionalPayAmount,
 				'결제 환불 금액': refundAmount,
 				'관부가세 환급': refundAmount && cardPurchaseValue ? row.totalTax : 0,
 				'국내 반품 비용': row.domesticExtraCharge,
@@ -687,7 +715,6 @@ export class OrderActualFeed implements iFeed {
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
 					if ((rows[i][key] === (isDate(feed[i][key]) ? feed[i][key]?.toISOString() : feed[i][key]))) continue
 					if (!['주문일', '구매확정일'].includes(key) && (parseFloat(rows[i][key]?.replace(/,/g, '')) === (isNaN(parseFloat(feed[i][key])) ? feed[i][key] : parseFloat(feed[i][key])))) continue
-
 					const cell = targetSheet.getCell(rows[i].rowIndex - 1, targetSheet.headerValues.indexOf(key))
 
 					if (cell?.effectiveFormat?.backgroundColor) {
