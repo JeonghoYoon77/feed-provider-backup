@@ -20,6 +20,10 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async getTsv({start, end, targetSheetId}: { start: Date, end: Date, targetSheetId?: string }): Promise<string> {
+		const beforeShippingStatus = ['BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED', 'ORDER_COMPLETE', 'ORDER_DELAY', 'ORDER_DELAY_IN_SHOP', 'PRODUCT_PREPARE']
+		const overseasStatus = ['SHIPPING_START', 'IN_WAYPOINT_SHIPPING', 'WAYPOINT_ARRIVAL']
+		const localStatus = ['DOMESTIC_CUSTOMS_CLEARANCE', 'CUSTOMS_CLEARANCE_DELAY', 'IN_DOMESTIC_SHIPPING', 'SHIPPING_COMPLETE', 'ORDER_CONFIRM']
+
 		// 재무 시트
 		const taxDoc = new GoogleSpreadsheet(
 			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU'
@@ -159,8 +163,8 @@ export class OrderActualFeed implements iFeed {
 			data.forEach(row => {
 				if (row['관리번호']) {
 					const id = parseInt(row['관리번호'].replace(/\D/g, ''))
-					vatRefund[id] = row['부가세 금액']
-					ibpFee[id] = row['IBP 수수료']
+					vatRefund[id] = parseFloat(row['부가세 금액'].replace(/[^\d.]/g, '').trim()) || 0
+					ibpFee[id] = parseFloat(row['IBP 수수료'].replace(/[^\d.]/g, '').trim()) || 0
 				}
 			})
 		}
@@ -281,7 +285,10 @@ export class OrderActualFeed implements iFeed {
                   WHERE up.user_id = fo.user_id
                     AND up.fetching_order_number = fo.fetching_order_number
                     AND up.save_type IN ('SERVICE_ISSUE', 'DELIVERY_ISSUE'))  AS pointByIssue,
-                 ssi.customer_negligence_return_fee                           AS returnFee,
+                 COALESCE((SELECT SUM(from_amount) - SUM(to_amount)
+                           FROM commerce.order_refund_history orh
+                           WHERE orh.order_refund_number = oref.order_refund_number),
+                          ssi.customer_negligence_return_fee)                 AS returnFee,
                  oret.reason_type                                             AS returnReason,
                  case
                      when oreti.return_item_number is not null
@@ -427,9 +434,10 @@ export class OrderActualFeed implements iFeed {
             AND fo.deleted_at IS NULL
             AND (
               (fo.created_at + INTERVAL 9 HOUR) >= ?
-            	AND
-              (fo.created_at + INTERVAL 9 HOUR) < ?
-            )
+            AND
+              (fo.created_at + INTERVAL 9 HOUR)
+              < ?
+              )
           GROUP BY io.item_order_number
           ORDER BY fo.created_at ASC
 			`,
@@ -466,6 +474,7 @@ export class OrderActualFeed implements iFeed {
 				statusCount[status]++
 			}
 
+			let cancelCount = statusCount['주문 취소'] ?? 0
 			let returnCount = statusCount['반품'] ?? 0
 
 			const priceData: any = {}
@@ -530,7 +539,7 @@ export class OrderActualFeed implements iFeed {
 				const cardApprovalNumber = e.trim()
 
 				const value =
-					row.cardCompanyName === '삼성카드' ? samsungCard[cardApprovalNumber] : lotteCard[cardApprovalNumber] || lotteCardExtra[cardApprovalNumber] || 0
+					(row.cardCompanyName === '삼성카드' ? samsungCard[cardApprovalNumber] : lotteCard[cardApprovalNumber] || lotteCardExtra[cardApprovalNumber]) || 0
 
 				return value + acc
 			}, 0)
@@ -624,13 +633,20 @@ export class OrderActualFeed implements iFeed {
 			let deductedVat = 0
 
 			if (row.ibpManageCode) {
-				deductedVat = Math.round((vatRefund[row.ibpManageCode] ?? 0) * currencyRate)
+				deductedVat = Math.round(parseFloat(vatRefund[row.ibpManageCode] ?? '0') * currencyRate)
 			}
 
 			let waypointFee = 0
 
 			if (row.ibpManageCode) {
-				waypointFee = Math.round((ibpFee[row.ibpManageCode] ?? 0) * currencyRate)
+				waypointFee = Math.round(parseFloat(ibpFee[row.ibpManageCode] ?? '0') * currencyRate)
+			}
+
+			let canceledDeductedVat = 0, canceledWaypointFee = 0
+
+			if ((cancelCount || returnCount) && !localStatus.includes(row.status)) {
+				canceledDeductedVat = itemPriceData['DEDUCTED_VAT']
+				canceledWaypointFee = itemPriceData['WAYPOINT_FEE']
 			}
 
 			let coupon = 0, point = 0
@@ -657,6 +673,14 @@ export class OrderActualFeed implements iFeed {
 				point += Calculate.cut(row.orderPointDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)), 1)
 			} else {
 				point += row.inheritedOrderUsePoint
+			}
+
+			let canceledCoupon = 0, canceledPoint = 0, canceledFetchingFee = 0
+
+			if ((cancelCount || returnCount)) {
+				canceledCoupon = coupon
+				canceledPoint = point
+				canceledFetchingFee = itemPriceData['FETCHING_FEE']
 			}
 
 			const data = {
@@ -689,6 +713,12 @@ export class OrderActualFeed implements iFeed {
 				'차액 결제 금액': row.additionalPayAmount,
 				'결제 환불 금액': refundAmount,
 				'관부가세 환급': refundAmount && cardPurchaseValue ? row.totalTax : 0,
+				'페칭 수수료 취소': canceledFetchingFee,
+				'부가세 환급 취소': canceledDeductedVat,
+				'부가세 환급 수수료 취소': canceledWaypointFee,
+				'쿠폰 반환': canceledCoupon,
+				'적립금 반환': canceledPoint,
+				'운송료 취소': 0,
 				'국내 반품 비용': row.domesticExtraCharge,
 				'해외 반품 비용': row.overseasExtraCharge,
 				'보상 적립금': row.pointByIssue,
@@ -723,6 +753,7 @@ export class OrderActualFeed implements iFeed {
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
+					console.log(feed[i]['상품별 주문번호'], key, feed[i][key])
 					cell.value = feed[i][key]
 					hasModified = true
 				}
