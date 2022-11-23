@@ -86,7 +86,8 @@ export class OrderPredictionFeed implements iFeed {
                                       oapi.status = 'PAID'
                      WHERE oap.fetching_order_number = fo.fetching_order_number
                  )                                                            AS additionalPayInfo,
-                 fo.status,
+                 fo.status                                                    AS fetchingOrderStatus,
+                 io.status                                                    AS status,
                  fo.order_path,
                  fo.pay_method,
                  (
@@ -292,6 +293,11 @@ export class OrderPredictionFeed implements iFeed {
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
 			row.additionalPayAmount = 0
 
+			const beforeShippingStatus = ['BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED', 'ORDER_COMPLETE', 'ORDER_DELAY', 'ORDER_DELAY_IN_SHOP', 'PRODUCT_PREPARE']
+			const overseasStatus = ['SHIPPING_START', 'IN_WAYPOINT_SHIPPING', 'WAYPOINT_ARRIVAL']
+
+			const localStatus = ['DOMESTIC_CUSTOMS_CLEARANCE', 'CUSTOMS_CLEARANCE_DELAY', 'IN_DOMESTIC_SHIPPING', 'SHIPPING_COMPLETE', 'ORDER_CONFIRM']
+
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001'
@@ -416,6 +422,15 @@ export class OrderPredictionFeed implements iFeed {
 					else itemPriceData['WAYPOINT_FEE'] = waypointFee
 				}
 			})
+
+			if (beforeShippingStatus.includes(row.status) || overseasStatus.includes(row.status)) {
+				itemPriceData['DEDUCTED_VAT'] = 0
+				itemPriceData['WAYPOINT_FEE'] = 0
+			}
+
+			if (beforeShippingStatus.includes(row.status)) {
+				itemPriceData['ADDITIONAL_FEE'] = 0
+			}
 
 			if (
 				['DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'].includes(row.returnReason) ||
