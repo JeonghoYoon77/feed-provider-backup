@@ -8,7 +8,7 @@ import {
 	KakaoUpdateFeed,
 	FacebookFeed,
 	PiclickFeed,
-	OrderFeed, OrderActualFeed, OrderPredictionFeed,
+	OrderFeed, OrderActualFeed, OrderPredictionFeed, CroketFeed,
 } from './feeds'
 
 program.version(version)
@@ -44,6 +44,10 @@ async function main() {
 		'PICLICK-FEED': async () => {
 			const piclickFeed = new PiclickFeed()
 			await piclickFeed.upload()
+		},
+		'CROKET-FEED': async () => {
+			const croketFeed = new CroketFeed()
+			await croketFeed.upload()
 		},
 		'ORDER-FEED': async () => {
 			const orderFeed = new OrderFeed()
