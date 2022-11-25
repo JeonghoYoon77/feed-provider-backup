@@ -159,10 +159,17 @@ export class OrderPredictionFeed implements iFeed {
                   WHERE up.user_id = fo.user_id
                     AND up.fetching_order_number = fo.fetching_order_number
                     AND up.save_type IN ('SERVICE_ISSUE', 'DELIVERY_ISSUE'))  AS pointByIssue,
-                 COALESCE((SELECT SUM(from_amount) - SUM(to_amount)
-                           FROM commerce.order_refund_history orh
-                           WHERE orh.order_refund_number = oref.order_refund_number),
-                          ssi.customer_negligence_return_fee)                 AS returnFee,
+                 COALESCE(
+										 IF(oref.created_at > '2022-11-02 14:10:00',
+												(SELECT SUM(from_amount) - SUM(to_amount)
+												 FROM commerce.order_refund_history orh
+												 WHERE orh.order_refund_number = oref.order_refund_number),
+												if(oret.reason_type IN ('DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'),
+													 0,
+													 ssi.customer_negligence_return_fee)
+												 ),
+										 0
+								 )                                                        		AS returnFee,
                  oret.reason_type                                             AS returnReason,
                  case
                      when oreti.return_item_number is not null
@@ -438,13 +445,6 @@ export class OrderPredictionFeed implements iFeed {
 
 			if ((cancelCount || returnCount) && beforeShippingStatus.includes(row.status)) {
 				canceledAdditionalFee = itemPriceData['ADDITIONAL_FEE']
-			}
-
-			if (
-				['DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'].includes(row.returnReason) ||
-				!returnCount
-			) {
-				row.returnFee = 0
 			}
 
 			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0)
