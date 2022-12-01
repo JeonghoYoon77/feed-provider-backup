@@ -190,7 +190,9 @@ export class OrderActualFeed implements iFeed {
                            LEFT JOIN commerce.order_refund_item ori
                                      ON io.item_order_number = ori.item_order_number AND ori.status = 'ACCEPT'
                   WHERE ori.item_order_number IS NULL
-                    AND so2.shop_order_number = so.shop_order_number)         AS shopOriginAmount,
+                    AND io.deleted_at IS NULL
+                    AND so2.shop_order_number = so.shop_order_number
+                    AND io.deleted_at IS NULL)                                AS shopOriginAmount,
                  (SELECT SUM(io.origin_amount)
                   FROM commerce.shop_order so2
                            JOIN commerce.item_order io ON so2.shop_order_number = io.shop_order_number
@@ -202,12 +204,14 @@ export class OrderActualFeed implements iFeed {
                            LEFT JOIN commerce.order_refund_item ori
                                      ON io.item_order_number = ori.item_order_number AND ori.status = 'ACCEPT'
                   WHERE ori.item_order_number IS NULL
+                    AND io.deleted_at IS NULL
                     AND fo2.fetching_order_number = fo.fetching_order_number) AS totalOriginAmount,
                  (SELECT SUM(io.origin_amount)
                   FROM commerce.fetching_order fo2
                            JOIN commerce.shop_order so ON fo2.fetching_order_number = so.fetching_order_number
                            JOIN commerce.item_order io ON so.shop_order_number = io.shop_order_number
-                  WHERE fo2.fetching_order_number = fo.fetching_order_number) AS fullTotalOriginAmount,
+                  WHERE fo2.fetching_order_number = fo.fetching_order_number
+                    AND io.deleted_at IS NULL)                                AS fullTotalOriginAmount,
                  fo.pay_amount                                                AS payAmount,
                  (SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
                   FROM commerce.order_additional_pay oap
@@ -276,6 +280,7 @@ export class OrderActualFeed implements iFeed {
                                            on io2.item_order_number = ori2.item_order_number AND
                                               ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT')
                         WHERE so2.fetching_order_number = fo.fetching_order_number
+                          AND io2.deleted_at IS NULL
                         GROUP BY io2.item_order_number) t)                    AS itemStatusList,
                  COALESCE(oretec_D.extra_charge, 0)                           AS domesticExtraCharge,
                  COALESCE(oretec_O.extra_charge, 0)                           AS overseasExtraCharge,
@@ -286,16 +291,20 @@ export class OrderActualFeed implements iFeed {
                     AND up.fetching_order_number = fo.fetching_order_number
                     AND up.save_type IN ('SERVICE_ISSUE', 'DELIVERY_ISSUE'))  AS pointByIssue,
                  COALESCE(
-										 IF(oref.created_at > '2022-11-02 14:10:00',
-												(SELECT SUM(from_amount) - SUM(to_amount)
-												 FROM commerce.order_refund_history orh
-												 WHERE orh.order_refund_number = oref.order_refund_number),
-												if(oret.reason_type IN ('DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'),
-												    0,
-												    ssi.customer_negligence_return_fee)
-										 ), 
-                     0
-                 )                                                            AS returnFee,
+                         IF(oref.created_at > '2022-11-02 14:10:00',
+                            (SELECT SUM(from_amount) - SUM(to_amount)
+                             FROM commerce.order_refund_history orh
+                             WHERE orh.order_refund_number = oref.order_refund_number),
+                            IF(oret.reason_type IS NOT NULL,
+                               if(oret.reason_type IN ('DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'),
+                                  0,
+                                  ssi.customer_negligence_return_fee
+                                   ),
+                               0
+                                )
+                             ),
+                         0
+                     )                                                        AS returnFee,
                  oret.reason_type                                             AS returnReason,
                  case
                      when oreti.return_item_number is not null
@@ -381,7 +390,8 @@ export class OrderActualFeed implements iFeed {
                            JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
                            JOIN shop_price sp2 ON so2.shop_id = sp2.idx
                            JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
-                  WHERE so2.fetching_order_number = fo.fetching_order_number) AS itemPayAmountDetail,
+                  WHERE so2.fetching_order_number = fo.fetching_order_number
+                    AND io2.deleted_at IS NULL)                               AS itemPayAmountDetail,
                  io.inherited_shop_coupon_discount_amount                     AS inheritedShopCouponDiscountAmount,
                  io.inherited_order_coupon_discount_amount                    AS inheritedOrderCouponDiscountAmount,
                  io.inherited_order_use_point                                 AS inheritedOrderUsePoint,
@@ -408,7 +418,10 @@ export class OrderActualFeed implements iFeed {
                   WHERE fom.fetching_order_number = fo.fetching_order_number
                     AND fom.to_value = 'ORDER_COMPLETE'
                   ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
-                                                                                 LIMIT 1)                                                    AS assignee
+                  LIMIT 1)                                                    AS assignee
+                 iocm.amount                                                  AS affiliateFee,
+                 oci.item_order_number IS NOT NULL                            AS isCanceled,
+                 oreti.item_order_number IS NOT NULL                          AS isReturned
           FROM commerce.fetching_order fo
               JOIN commerce.shop_order so
           ON fo.fetching_order_number = so.fetching_order_number
@@ -439,6 +452,7 @@ export class OrderActualFeed implements iFeed {
               LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
+            AND io.deleted_at IS NULL
             AND (
               (fo.created_at + INTERVAL 9 HOUR) >= ?
             AND
@@ -467,7 +481,8 @@ export class OrderActualFeed implements iFeed {
 					return data?.ResultCode === '2001'
 				})
 
-			const refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
+			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
+			if (!(row.isCanceled || row.isReturned)) refundAmount = 0
 			// const salesAmount = row.payAmount - refundAmount
 			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
 			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
@@ -480,9 +495,6 @@ export class OrderActualFeed implements iFeed {
 				if (!statusCount[status]) statusCount[status] = 0
 				statusCount[status]++
 			}
-
-			let cancelCount = statusCount['주문 취소'] ?? 0
-			let returnCount = statusCount['반품'] ?? 0
 
 			const priceData: any = {}
 			JSON.parse(row.payAmountDetail).forEach((row) => {
@@ -644,7 +656,7 @@ export class OrderActualFeed implements iFeed {
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
 
-			if ((cancelCount || returnCount) && !localStatus.includes(row.status)) {
+			if ((row.isCanceled || row.isReturned) && !localStatus.includes(row.status)) {
 				canceledDeductedVat = itemPriceData['DEDUCTED_VAT']
 				canceledWaypointFee = itemPriceData['WAYPOINT_FEE']
 			}
@@ -677,7 +689,7 @@ export class OrderActualFeed implements iFeed {
 
 			let canceledCoupon = 0, canceledPoint = 0, canceledFetchingFee = 0
 
-			if ((cancelCount || returnCount)) {
+			if ((row.isCanceled || row.isReturned)) {
 				canceledCoupon = coupon
 				canceledPoint = point
 				canceledFetchingFee = itemPriceData['FETCHING_FEE']

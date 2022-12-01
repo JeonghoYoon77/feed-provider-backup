@@ -63,11 +63,13 @@ export class OrderPredictionFeed implements iFeed {
                            LEFT JOIN commerce.order_refund_item ori
                                      ON io.item_order_number = ori.item_order_number AND ori.status = 'ACCEPT'
                   WHERE ori.item_order_number IS NULL
+                    AND io.deleted_at IS NULL
                     AND so2.shop_order_number = so.shop_order_number)         AS shopOriginAmount,
                  (SELECT SUM(io.origin_amount)
                   FROM commerce.shop_order so2
                            JOIN commerce.item_order io ON so2.shop_order_number = io.shop_order_number
-                  WHERE so2.shop_order_number = so.shop_order_number)         AS fullShopOriginAmount,
+                  WHERE so2.shop_order_number = so.shop_order_number
+                    AND io.deleted_at IS NULL)                                AS fullShopOriginAmount,
                  (SELECT SUM(io.origin_amount)
                   FROM commerce.fetching_order fo2
                            JOIN commerce.shop_order so ON fo2.fetching_order_number = so.fetching_order_number
@@ -75,12 +77,14 @@ export class OrderPredictionFeed implements iFeed {
                            LEFT JOIN commerce.order_refund_item ori
                                      ON io.item_order_number = ori.item_order_number AND ori.status = 'ACCEPT'
                   WHERE ori.item_order_number IS NULL
+                    AND io.deleted_at IS NULL
                     AND fo2.fetching_order_number = fo.fetching_order_number) AS totalOriginAmount,
                  (SELECT SUM(io.origin_amount)
                   FROM commerce.fetching_order fo2
                            JOIN commerce.shop_order so ON fo2.fetching_order_number = so.fetching_order_number
                            JOIN commerce.item_order io ON so.shop_order_number = io.shop_order_number
-                  WHERE fo2.fetching_order_number = fo.fetching_order_number) AS fullTotalOriginAmount,
+                  WHERE fo2.fetching_order_number = fo.fetching_order_number
+                    AND io.deleted_at IS NULL)                                AS fullTotalOriginAmount,
                  fo.pay_amount                                                AS payAmount,
                  (SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
                   FROM commerce.order_additional_pay oap
@@ -94,12 +98,8 @@ export class OrderPredictionFeed implements iFeed {
                  fo.pay_method,
                  (SELECT JSON_ARRAYAGG(status)
                   FROM (SELECT case
-                                   when ori2.status = 'ACCEPT'
+                                   when ori2.return_item_number is not null
                                        then '반품'
-                                   when ori2.status = 'IN_PROGRESS'
-                                       then '반품 진행 중'
-                                   when ori2.status = 'HOLD'
-                                       then '반품 보류'
                                    when oci2.cancel_item_number is not null
                                        then '주문 취소'
                                    when fo2.status = 'COMPLETE'
@@ -148,8 +148,9 @@ export class OrderPredictionFeed implements iFeed {
                                               oci2.status = 'ACCEPT'
                                  left join commerce.order_return_item ori2
                                            on io2.item_order_number = ori2.item_order_number AND
-                                              ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT')
+                                              ori2.status = 'ACCEPT'
                         WHERE so2.fetching_order_number = fo.fetching_order_number
+                          AND io2.deleted_at IS NULL
                         GROUP BY io2.item_order_number) t)                    AS itemStatusList,
                  COALESCE(oretec_D.extra_charge, 0)                           AS domesticExtraCharge,
                  COALESCE(oretec_O.extra_charge, 0)                           AS overseasExtraCharge,
@@ -164,10 +165,14 @@ export class OrderPredictionFeed implements iFeed {
 												(SELECT SUM(from_amount) - SUM(to_amount)
 												 FROM commerce.order_refund_history orh
 												 WHERE orh.order_refund_number = oref.order_refund_number),
-												if(oret.reason_type IN ('DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'),
-													 0,
-													 ssi.customer_negligence_return_fee)
-												 ),
+												IF(oret.reason_type IS NOT NULL,
+												    if(oret.reason_type IN ('DEFECTIVE_PRODUCT', 'WRONG_DELIVERY'),
+												        0,
+												        ssi.customer_negligence_return_fee
+												    ),
+												    0
+												)
+										 ),
 										 0
 								 )                                                        		AS returnFee,
                  oret.reason_type                                             AS returnReason,
@@ -249,7 +254,8 @@ export class OrderPredictionFeed implements iFeed {
                            JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
                            JOIN shop_price sp2 ON so2.shop_id = sp2.idx
                            JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
-                  WHERE io2.item_order_number = io.item_order_number)         AS itemPayAmountDetail,
+                  WHERE io2.item_order_number = io.item_order_number
+                    AND io2.deleted_at IS NULL)                               AS itemPayAmountDetail,
                  io.inherited_shop_coupon_discount_amount                     AS inheritedShopCouponDiscountAmount,
                  io.inherited_order_coupon_discount_amount                    AS inheritedOrderCouponDiscountAmount,
                  io.inherited_order_use_point                                 AS inheritedOrderUsePoint,
@@ -259,7 +265,9 @@ export class OrderPredictionFeed implements iFeed {
                  fo.use_point                                                 AS orderPointDiscountAmount,
                  so.is_ddp_service                                            AS isDDP,
                  CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
-                 iocm.amount                                                  AS affiliateFee
+                 iocm.amount                                                  AS affiliateFee,
+                 oci.item_order_number IS NOT NULL                            AS isCanceled,
+                 oreti.item_order_number IS NOT NULL                          AS isReturned
           FROM commerce.fetching_order fo
                    JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
                    JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
@@ -293,6 +301,7 @@ export class OrderPredictionFeed implements iFeed {
                    LEFT JOIN shop_support_info ssi ON si.shop_id = ssi.shop_id
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
+            AND io.deleted_at IS NULL
             AND (
                       (fo.created_at + INTERVAL 9 HOUR) >= ?
                   AND
@@ -314,7 +323,8 @@ export class OrderPredictionFeed implements iFeed {
 					return data?.ResultCode === '2001'
 				})
 
-			const refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
+			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
+			if (!(row.isCanceled || row.isReturned)) refundAmount = 0
 			// const salesAmount = row.payAmount - refundAmount
 			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
 			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
@@ -378,22 +388,22 @@ export class OrderPredictionFeed implements iFeed {
 				Object.entries<any>(JSON.parse(detail.payAmount)).forEach(([key, data]) => {
 					if (key !== detail.country && (detail.country === 'KR' ? count !== 0 : true)) return
 					count++
-					data.forEach((row) => {
-						if (itemPriceData[row.type]) {
-							itemPriceData[row.type] += row.rawValue
+					data.forEach((_row) => {
+						if (itemPriceData[_row.type]) {
+							itemPriceData[_row.type] += _row.rawValue * row.quantity
 						} else {
-							itemPriceData[row.type] = row.rawValue
-							itemPriceDataCanceled[row.type] = 0
+							itemPriceData[_row.type] = _row.rawValue * row.quantity
+							itemPriceDataCanceled[_row.type] = 0
 						}
-						if (currentItemPriceData[row.type]) {
-							currentItemPriceData[row.type] += row.rawValue
+						if (currentItemPriceData[_row.type]) {
+							currentItemPriceData[_row.type] += _row.rawValue * row.quantity
 						} else {
-							currentItemPriceData[row.type] = row.rawValue
+							currentItemPriceData[_row.type] = _row.rawValue * row.quantity
 						}
 						if (detail.isRefunded) {
-							if (itemPriceDataCanceled[row.type])
-								itemPriceDataCanceled[row.type] += row.rawValue
-							else itemPriceDataCanceled[row.type] = row.rawValue
+							if (itemPriceDataCanceled[_row.type])
+								itemPriceDataCanceled[_row.type] += _row.rawValue * row.quantity
+							else itemPriceDataCanceled[_row.type] = _row.rawValue * row.quantity
 						}
 					})
 				})
@@ -436,14 +446,14 @@ export class OrderPredictionFeed implements iFeed {
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
 
-			if ((cancelCount || returnCount) && !localStatus.includes(row.status)) {
+			if ((row.isCanceled || row.isReturned) && !localStatus.includes(row.status)) {
 				canceledDeductedVat = itemPriceData['DEDUCTED_VAT']
 				canceledWaypointFee = itemPriceData['WAYPOINT_FEE']
 			}
 
 			let canceledAdditionalFee = 0
 
-			if ((cancelCount || returnCount) && beforeShippingStatus.includes(row.status)) {
+			if ((row.isCanceled || row.isReturned) && beforeShippingStatus.includes(row.status)) {
 				canceledAdditionalFee = itemPriceData['ADDITIONAL_FEE']
 			}
 
@@ -478,7 +488,7 @@ export class OrderPredictionFeed implements iFeed {
 
 			let canceledCoupon = 0, canceledPoint = 0, canceledFetchingFee = 0
 
-			if ((cancelCount || returnCount)) {
+			if ((row.isCanceled || row.isReturned)) {
 				canceledCoupon = coupon
 				canceledPoint = point
 				canceledFetchingFee = itemPriceData['FETCHING_FEE']
@@ -513,7 +523,7 @@ export class OrderPredictionFeed implements iFeed {
 				'실 결제 금액': row.payAmount,
 				'차액 결제 금액': parseInt(row.additionalPayAmount) || 0,
 				'결제 환불 금액': refundAmount,
-				'관부가세 환급': (cancelCount || returnCount) ? (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']) : 0,
+				'관부가세 환급': (row.isCanceled || row.isReturned) ? (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']) : 0,
 				'페칭 수수료 취소': canceledFetchingFee,
 				'부가세 환급 취소': canceledDeductedVat,
 				'부가세 환급 수수료 취소': canceledWaypointFee,
@@ -524,7 +534,7 @@ export class OrderPredictionFeed implements iFeed {
 				'해외 반품 비용': row.overseasExtraCharge,
 				'보상 적립금': row.pointByIssue,
 				'수선 비용': row.repairExtraCharge,
-				'매입 환출 금액': (cancelCount || returnCount) ? Math.abs(purchaseValue) : 0, // -cardRefundValue,
+				'매입 환출 금액': (row.isCanceled || row.isReturned) ? Math.abs(purchaseValue) : 0, // -cardRefundValue,
 				'반품 수수료': row.returnFee,
 				'제휴 수수료': ''
 			}
