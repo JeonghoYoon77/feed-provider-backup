@@ -145,10 +145,10 @@ export class OrderPredictionFeed implements iFeed {
                                             ON so2.fetching_order_number = fo2.fetching_order_number
                                  left join commerce.order_cancel_item oci2
                                            on io2.item_order_number = oci2.item_order_number AND
-                                              oci2.status = 'ACCEPT'
+                                              oci2.status = 'ACCEPT' AND oci2.deleted_at IS NULL
                                  left join commerce.order_return_item ori2
                                            on io2.item_order_number = ori2.item_order_number AND
-                                              ori2.status = 'ACCEPT'
+                                              ori2.status = 'ACCEPT' AND ori2.deleted_at IS NULL
                         WHERE so2.fetching_order_number = fo.fetching_order_number
                           AND io2.deleted_at IS NULL
                         GROUP BY io2.item_order_number) t)                    AS itemStatusList,
@@ -272,10 +272,10 @@ export class OrderPredictionFeed implements iFeed {
                    JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
                    JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
                    LEFT JOIN commerce.order_cancel_item oci
-                             on io.item_order_number = oci.item_order_number AND oci.status = 'ACCEPT'
+                             on io.item_order_number = oci.item_order_number AND oci.status = 'ACCEPT' AND oci.deleted_at IS NULL
                    LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
                    LEFT JOIN commerce.order_return_item oreti
-                             on oreti.item_order_number = io.item_order_number AND oreti.status = 'ACCEPT'
+                             on oreti.item_order_number = io.item_order_number AND oreti.status = 'ACCEPT' AND oreti.deleted_at IS NULL
                    LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
                    LEFT JOIN commerce.order_return_extra_charge oretec_D
                              ON oretec_D.order_return_number = oret.order_return_number AND
@@ -287,7 +287,7 @@ export class OrderPredictionFeed implements iFeed {
                              ON oretec_R.order_return_number = oret.order_return_number AND
                                 oretec_R.reason_type = 'REPAIR'
                    LEFT JOIN commerce.order_refund_item orefi
-                             on orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT'
+                             on orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT' AND orefi.deleted_at IS NULL
                    LEFT JOIN commerce.order_refund oref on orefi.order_refund_number = oref.order_refund_number
                    LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
                    LEFT JOIN commerce.credit_card_company ccc ON ccc.idx = io.card_company_id
