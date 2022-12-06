@@ -225,8 +225,6 @@ export class OrderPredictionFeed implements iFeed {
                     AND success)                                              AS refundData,
                  (SELECT JSON_ARRAYAGG(oapcl.data)
                   FROM commerce.order_additional_pay_cancel_log oapcl
-                           JOIN commerce.order_additional_pay_cancel_log_item_map oapclim
-                                ON oapcl.idx = oapclim.cancel_log_id
                            JOIN commerce.order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
                            JOIN commerce.order_additional_pay_item oapi
                                 ON oapi.additional_item_number = oapl.additional_item_number
