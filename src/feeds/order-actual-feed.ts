@@ -163,8 +163,8 @@ export class OrderActualFeed implements iFeed {
 			data.forEach(row => {
 				if (row['관리번호']) {
 					const id = parseInt(row['관리번호'].replace(/\D/g, ''))
-					vatRefund[id] = parseFloat(row['부가세 금액'].replace(/[^\d.]/g, '').trim()) || 0
-					ibpFee[id] = parseFloat(row['IBP 수수료'].replace(/[^\d.]/g, '').trim()) || 0
+					vatRefund[id] = parseFloat(row['부가세 금액']?.replace(/[^\d.]/g, '')?.trim()) || 0
+					ibpFee[id] = parseFloat(row['IBP 수수료']?.replace(/[^\d.]/g, '')?.trim()) || 0
 				}
 			})
 		}
@@ -179,7 +179,7 @@ export class OrderActualFeed implements iFeed {
                  fo.fetching_order_number,
                  io.item_order_number                                         AS itemOrderNumber,
 
-                 ccc.idx                                                      AS cardCompanyName,
+                 ccc.idx                                                      AS cardCompanyId,
                  ccc.name                                                     AS cardCompanyName,
                  io.vendor_order_number                                       AS vendorOrderNumber,
                  io.card_approval_number                                      AS cardApprovalNumber,
@@ -410,7 +410,6 @@ export class OrderActualFeed implements iFeed {
                  so.is_ddp_service                                            AS isDDP,
                  weight                                                       AS weight,
                  imc.idx                                                      AS ibpManageCode,
-                 iocm.amount                                                  AS affiliateFee,
                  CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
                  (SELECT u.name
                   FROM commerce.fetching_order_memo fom
@@ -418,7 +417,7 @@ export class OrderActualFeed implements iFeed {
                   WHERE fom.fetching_order_number = fo.fetching_order_number
                     AND fom.to_value = 'ORDER_COMPLETE'
                   ORDER BY fom.to_value = 'ORDER_COMPLETE' DESC, fom.created_at DESC
-                  LIMIT 1)                                                    AS assignee
+                  LIMIT 1)                                                    AS assignee,
                  iocm.amount                                                  AS affiliateFee,
                  oci.item_order_number IS NOT NULL                            AS isCanceled,
                  oreti.item_order_number IS NOT NULL                          AS isReturned
@@ -594,7 +593,7 @@ export class OrderActualFeed implements iFeed {
 				let deductedVat
 				if (isNil(currentItemPriceData['DEDUCTED_VAT'])) {
 					const fasstoPurchaseAmount = currentItemPriceData['SHOP_PRICE_KOR'] + currentItemPriceData['DELIVERY_FEE']
-					deductedVat = Calculate.cut(fasstoPurchaseAmount - fasstoPurchaseAmount / (1 + detail.vatDeductionRate))
+					deductedVat = Math.round(fasstoPurchaseAmount - fasstoPurchaseAmount / (1 + detail.vatDeductionRate))
 					currentItemPriceData['DEDUCTED_VAT'] = deductedVat
 					if (itemPriceData['DEDUCTED_VAT'])
 						itemPriceData['DEDUCTED_VAT'] += deductedVat
@@ -607,10 +606,10 @@ export class OrderActualFeed implements iFeed {
 
 					switch (detail.waypointFeeType) {
 					case 'PERCENT':
-						waypointFee = Calculate.cut((currentItemPriceData['SHOP_PRICE_KOR'] - deductedVat) * (deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction))
+						waypointFee = Math.round((currentItemPriceData['SHOP_PRICE_KOR'] - deductedVat) * (deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction))
 						break
 					case 'FIXED':
-						waypointFee = Calculate.cut((deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction) * waypointCurrencyRate)
+						waypointFee = Math.round((deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction) * waypointCurrencyRate)
 						break
 					}
 
@@ -656,7 +655,7 @@ export class OrderActualFeed implements iFeed {
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
 
-			if ((row.isCanceled || row.isReturned) && !localStatus.includes(row.status)) {
+			if ((row.isCanceled && !localStatus.includes(row.status)) || row.isReturned) {
 				canceledDeductedVat = itemPriceData['DEDUCTED_VAT']
 				canceledWaypointFee = itemPriceData['WAYPOINT_FEE']
 			}
@@ -668,21 +667,21 @@ export class OrderActualFeed implements iFeed {
 			}
 
 			if (isNil(row.inheritedShopCouponDiscountAmount)) {
-				const shopCouponDiscountAmount = Calculate.cut(row.shopCouponDiscountAmount * (row.originAmount / (row.shopOriginAmount ?? row.fullShopOriginAmount)), 1)
+				const shopCouponDiscountAmount = Math.round(row.shopCouponDiscountAmount * (row.originAmount / (row.shopOriginAmount ?? row.fullShopOriginAmount)))
 				if (shopCouponDiscountAmount) coupon += shopCouponDiscountAmount
 			} else {
 				coupon += row.inheritedShopCouponDiscountAmount
 			}
 
 			if (isNil(row.inheritedOrderCouponDiscountAmount)) {
-				const orderCouponDiscountAmount = Calculate.cut(row.orderCouponDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)), 1)
+				const orderCouponDiscountAmount = Math.round(row.orderCouponDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)))
 				if (orderCouponDiscountAmount) coupon += orderCouponDiscountAmount
 			} else {
 				coupon += row.inheritedOrderCouponDiscountAmount
 			}
 
 			if (isNil(row.inheritedOrderUsePoint)) {
-				point += Calculate.cut(row.orderPointDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)), 1)
+				point += Math.round(row.orderPointDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)))
 			} else {
 				point += row.inheritedOrderUsePoint
 			}

@@ -98,9 +98,11 @@ export class OrderPredictionFeed implements iFeed {
                  fo.pay_method,
                  (SELECT JSON_ARRAYAGG(status)
                   FROM (SELECT case
-                                   when ori2.return_item_number is not null
+                                   when oreti2.return_item_number is not null
                                        then '반품'
                                    when oci2.cancel_item_number is not null
+                                       then '주문 취소'
+                                   when orefi2.refund_item_number is not null
                                        then '주문 취소'
                                    when fo2.status = 'COMPLETE'
                                        then '구매 확정'
@@ -146,9 +148,12 @@ export class OrderPredictionFeed implements iFeed {
                                  left join commerce.order_cancel_item oci2
                                            on io2.item_order_number = oci2.item_order_number AND
                                               oci2.status = 'ACCEPT' AND oci2.deleted_at IS NULL
-                                 left join commerce.order_return_item ori2
-                                           on io2.item_order_number = ori2.item_order_number AND
-                                              ori2.status = 'ACCEPT' AND ori2.deleted_at IS NULL
+                                 left join commerce.order_return_item oreti2
+                                           on io2.item_order_number = oreti2.item_order_number AND
+                                              oreti2.status = 'ACCEPT' AND oreti2.deleted_at IS NULL
+                                 left join commerce.order_refund_item orefi2
+                                           on io2.item_order_number = orefi2.item_order_number AND
+                                              orefi2.status = 'ACCEPT' AND orefi2.deleted_at IS NULL
                         WHERE so2.fetching_order_number = fo.fetching_order_number
                           AND io2.deleted_at IS NULL
                         GROUP BY io2.item_order_number) t)                    AS itemStatusList,
@@ -180,6 +185,8 @@ export class OrderPredictionFeed implements iFeed {
                      when oreti.return_item_number is not null
                          then '반품'
                      when oci.cancel_item_number is not null
+                         then '주문 취소'
+                     when orefi.order_refund_number is not null
                          then '주문 취소'
                      when fo.status = 'COMPLETE'
                          then '구매 확정'
@@ -234,7 +241,11 @@ export class OrderPredictionFeed implements iFeed {
                  (SELECT JSON_ARRAYAGG(JSON_OBJECT('itemOrderNumber', io2.item_order_number,
                                                    'payAmount', io2.pay_amount_detail,
                                                    'country', sp2.shop_country,
-                                                   'isRefunded', ori2.item_order_number IS NOT NULL,
+                                                   'isRefunded', EXISTS(SELECT *
+                                                                        FROM commerce.order_refund_item ori2
+                                                                        WHERE ori2.item_order_number = io2.item_order_number
+                                                                          AND ori2.status = 'ACCEPT'
+                                                                          AND ori2.deleted_at IS NULL),
                                                    'vatDeductionRate',
                                                    IF(dm2.vat_deduct && sp2.is_vat_deduction_available,
                                                       sp2.vat_deduction_rate, 0),
@@ -246,9 +257,6 @@ export class OrderPredictionFeed implements iFeed {
                                                    dm2.minimum_fee_without_deduction
                      ))
                   FROM commerce.item_order io2
-                           LEFT JOIN commerce.order_refund_item ori2
-                                     ON ori2.item_order_number = io2.item_order_number AND ori2.status = 'ACCEPT' AND
-                                        ori2.deleted_at IS NULL
                            JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
                            JOIN shop_price sp2 ON so2.shop_id = sp2.idx
                            JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
@@ -264,7 +272,8 @@ export class OrderPredictionFeed implements iFeed {
                  so.is_ddp_service                                            AS isDDP,
                  CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
                  iocm.amount                                                  AS affiliateFee,
-                 oci.item_order_number IS NOT NULL                            AS isCanceled,
+                 oci.item_order_number IS NOT NULL OR
+                 orefi.item_order_number IS NOT NULL                          AS isCanceled,
                  oreti.item_order_number IS NOT NULL                          AS isReturned
           FROM commerce.fetching_order fo
                    JOIN commerce.shop_order so ON fo.fetching_order_number = so.fetching_order_number
@@ -387,6 +396,10 @@ export class OrderPredictionFeed implements iFeed {
 					if (key !== detail.country && (detail.country === 'KR' ? count !== 0 : true)) return
 					count++
 					data.forEach((_row) => {
+						if (!localStatus.includes(row.status) && _row.type === 'DUTY_AND_TAX') {
+							itemPriceData[_row.type] = 0
+							itemPriceDataCanceled[_row.type] = 0
+						}
 						if (itemPriceData[_row.type]) {
 							itemPriceData[_row.type] += _row.rawValue * row.quantity
 						} else {
@@ -409,7 +422,7 @@ export class OrderPredictionFeed implements iFeed {
 				let deductedVat
 				if (isNil(currentItemPriceData['DEDUCTED_VAT'])) {
 					const fasstoPurchaseAmount = currentItemPriceData['SHOP_PRICE_KOR'] + currentItemPriceData['DELIVERY_FEE']
-					deductedVat = Calculate.cut(fasstoPurchaseAmount - fasstoPurchaseAmount / (1 + detail.vatDeductionRate))
+					deductedVat = Math.round(fasstoPurchaseAmount - fasstoPurchaseAmount / (1 + detail.vatDeductionRate))
 					currentItemPriceData['DEDUCTED_VAT'] = deductedVat
 					if (itemPriceData['DEDUCTED_VAT'])
 						itemPriceData['DEDUCTED_VAT'] += deductedVat
@@ -422,10 +435,10 @@ export class OrderPredictionFeed implements iFeed {
 
 					switch (detail.waypointFeeType) {
 					case 'PERCENT':
-						waypointFee = Calculate.cut((currentItemPriceData['SHOP_PRICE_KOR'] - deductedVat) * (deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction))
+						waypointFee = Math.round((currentItemPriceData['SHOP_PRICE_KOR'] - deductedVat) * (deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction))
 						break
 					case 'FIXED':
-						waypointFee = Calculate.cut((deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction) * waypointCurrencyRate)
+						waypointFee = Math.round((deductedVat ? detail.waypointFeeWithDeduction : detail.waypointFeeWithoutDeduction) * waypointCurrencyRate)
 						break
 					}
 
@@ -444,14 +457,14 @@ export class OrderPredictionFeed implements iFeed {
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
 
-			if ((row.isCanceled || row.isReturned) && !localStatus.includes(row.status)) {
+			if (row.isCanceled && !localStatus.includes(row.status)) {
 				canceledDeductedVat = itemPriceData['DEDUCTED_VAT']
 				canceledWaypointFee = itemPriceData['WAYPOINT_FEE']
 			}
 
 			let canceledAdditionalFee = 0
 
-			if ((row.isCanceled || row.isReturned) && beforeShippingStatus.includes(row.status)) {
+			if ((row.isCanceled && beforeShippingStatus.includes(row.status)) || row.isReturned) {
 				canceledAdditionalFee = itemPriceData['ADDITIONAL_FEE']
 			}
 
@@ -465,21 +478,21 @@ export class OrderPredictionFeed implements iFeed {
 			}
 
 			if (isNil(row.inheritedShopCouponDiscountAmount)) {
-				const shopCouponDiscountAmount = Calculate.cut(row.shopCouponDiscountAmount * (row.originAmount / (row.shopOriginAmount ?? row.fullShopOriginAmount)), 1)
+				const shopCouponDiscountAmount = Math.round(row.shopCouponDiscountAmount * (row.originAmount / (row.shopOriginAmount ?? row.fullShopOriginAmount)))
 				if (shopCouponDiscountAmount) coupon += shopCouponDiscountAmount
 			} else {
 				coupon += row.inheritedShopCouponDiscountAmount
 			}
 
 			if (isNil(row.inheritedOrderCouponDiscountAmount)) {
-				const orderCouponDiscountAmount = Calculate.cut(row.orderCouponDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)), 1)
+				const orderCouponDiscountAmount = Math.round(row.orderCouponDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)))
 				if (orderCouponDiscountAmount) coupon += orderCouponDiscountAmount
 			} else {
 				coupon += row.inheritedOrderCouponDiscountAmount
 			}
 
 			if (isNil(row.inheritedOrderUsePoint)) {
-				point += Calculate.cut(row.orderPointDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)), 1)
+				point += Math.round(row.orderPointDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)))
 			} else {
 				point += row.inheritedOrderUsePoint
 			}
@@ -521,7 +534,7 @@ export class OrderPredictionFeed implements iFeed {
 				'실 결제 금액': row.payAmount,
 				'차액 결제 금액': parseInt(row.additionalPayAmount) || 0,
 				'결제 환불 금액': refundAmount,
-				'관부가세 환급': (row.isCanceled || row.isReturned) ? (row.isDDP ? 0 : itemPriceData['DUTY_AND_TAX']) : 0,
+				'관부가세 환급': ((row.isCanceled || row.isReturned) && row.invoice && row.isDDP) ? itemPriceData['DUTY_AND_TAX'] : 0,
 				'페칭 수수료 취소': canceledFetchingFee,
 				'부가세 환급 취소': canceledDeductedVat,
 				'부가세 환급 수수료 취소': canceledWaypointFee,
@@ -561,8 +574,6 @@ export class OrderPredictionFeed implements iFeed {
 						if (!(red === 1 && green === 1 && blue === 1)) continue
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
-
-					//console.log(key, feed[i]['상품별 주문번호'], feed[i][key])
 
 					cell.value = feed[i][key]
 					hasModified = true
