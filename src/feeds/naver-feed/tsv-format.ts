@@ -29,7 +29,7 @@ class TSVFormat {
 		title = title.replace('É', 'E')
 		title = title.split('\n').join('')
 
-		return title.replace(/([&"'_])/g, ' ').split(' ').filter(data => data).join(' ')
+		return title.replace(/([^\dA-z ])/g, ' ').split(' ').filter(data => data).join(' ')
 	}
 
 	public link({ address }) {
