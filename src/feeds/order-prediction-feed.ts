@@ -728,5 +728,31 @@ export class OrderPredictionFeed implements iFeed {
 				contentType: 'text/csv',
 			})
 		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '11월_추정.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-11-01T00:00:00.000Z'),
+					new Date('2022-12-01T00:00:00.000Z'),
+					'1939056953'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '12월_추정.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-12-01T00:00:00.000Z'),
+					new Date('2023-01-01T00:00:00.000Z'),
+					'1023661014'
+				),
+				contentType: 'text/csv',
+			})
+		)
 	}
 }

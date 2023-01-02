@@ -626,7 +626,7 @@ export class OrderActualFeed implements iFeed {
 				}
 			})
 
-			const taxTotal = tax[row.fetching_order_number] || 0
+			const taxTotal = row.totalTax || tax[row.itemOrderNumber] || tax[row.fetching_order_number] || 0
 
 			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] - itemPriceData['DEDUCTED_VAT'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
@@ -656,8 +656,8 @@ export class OrderActualFeed implements iFeed {
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
 
 			if ((row.isCanceled && !localStatus.includes(row.status)) || row.isReturned) {
-				canceledDeductedVat = itemPriceData['DEDUCTED_VAT']
-				canceledWaypointFee = itemPriceData['WAYPOINT_FEE']
+				canceledDeductedVat = deductedVat
+				canceledWaypointFee = waypointFee
 			}
 
 			let coupon = 0, point = 0
@@ -914,6 +914,32 @@ export class OrderActualFeed implements iFeed {
 					new Date('2022-10-01T00:00:00.000Z'),
 					new Date('2022-11-01T00:00:00.000Z'),
 					'147779322'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '11월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-11-01T00:00:00.000Z'),
+					new Date('2022-12-01T00:00:00.000Z'),
+					'1352253972'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '12월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2022-12-01T00:00:00.000Z'),
+					new Date('2023-01-01T00:00:00.000Z'),
+					'1237354903'
 				),
 				contentType: 'text/csv',
 			})
