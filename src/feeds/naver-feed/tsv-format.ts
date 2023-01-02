@@ -22,7 +22,9 @@ class TSVFormat {
 		if (itemName.includes(brandName)) itemName = itemName.replace(brandName, '').trim()
 		if (itemName.includes(brandNameKor)) itemName = itemName.replace(brandNameKor, '').trim()
 
-		let title = `${mainName} ${itemName} ${this.color(customColor)} ${(mpn ? mpn : [72, 78, 80].includes(shopId) ? idx : itemCode).replace(/([^\dA-z ])/g, ' ')} ${this._gender}`
+		const code = `${(mpn ? mpn : [72, 78, 80].includes(shopId) ? idx : itemCode) || ''}`
+
+		let title = `${mainName} ${itemName} ${this.color(customColor)} ${code.replace(/([^\dA-z ])/g, ' ')} ${this._gender}`
 			.split(' ').filter(str => str).join(' ')
 
 		title = title.replace('è', 'e')
