@@ -16,6 +16,7 @@ class TSVFormat {
 	}
 
 	public async title({ idx, shopId, itemCode, mainName, brandName, brandNameKor, lastCategory, itemName, customColor, mpn = '',  }): Promise<string> {
+		// 수정할 시, 상품 목록에 있는 네이버 피드 이름도 같이 수정할 것
 		if (itemName.search(/[ㄱ-ㅎㅏ-ㅣ가-힣]/) === -1) itemName = lastCategory
 		itemName = itemName.trim()
 
