@@ -25,9 +25,6 @@ export class OrderActualFeed implements iFeed {
 		const localStatus = ['DOMESTIC_CUSTOMS_CLEARANCE', 'CUSTOMS_CLEARANCE_DELAY', 'IN_DOMESTIC_SHIPPING', 'SHIPPING_COMPLETE', 'ORDER_CONFIRM']
 
 		// 재무 시트
-		const taxDoc = new GoogleSpreadsheet(
-			'1SoZM_RUVsuIMyuJdOzWYmwirSb-2c0-5peEPm9K0ATU'
-		)
 		const vatRefundDoc = new GoogleSpreadsheet(
 			'1k2ZGGVr1blw8QF9fxQ-80mbgThq8mcFayfaWGRoWacY'
 		)
@@ -36,10 +33,6 @@ export class OrderActualFeed implements iFeed {
 		)
 
 		/* eslint-disable camelcase */
-		await taxDoc.useServiceAccountAuth({
-			client_email: sheetData.client_email,
-			private_key: sheetData.private_key,
-		})
 		await vatRefundDoc.useServiceAccountAuth({
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
@@ -50,7 +43,6 @@ export class OrderActualFeed implements iFeed {
 		})
 		/* eslint-enable camelcase */
 
-		await taxDoc.loadInfo()
 		await targetDoc.loadInfo()
 		await vatRefundDoc.loadInfo()
 
@@ -59,7 +51,7 @@ export class OrderActualFeed implements iFeed {
 		const lotteCardSheet = targetDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
 		const lotteCardExtraSheet = targetDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
 		const samsungCardSheet = targetDoc.sheetsById['880709363'] // 삼성카드 매출내역
-		const taxSheet = taxDoc.sheetsById['1605798118']
+		const taxSheet = targetDoc.sheetsById['159377898']
 
 		const eldexRaw = await eldexSheet.getRows()
 		const ibpRaw = await ibpSheet.getRows()
@@ -97,62 +89,54 @@ export class OrderActualFeed implements iFeed {
 		})
 
 		taxRaw.forEach((row) => {
-			if (row['주문번호']) {
-				const id = row['주문번호'].trim()
+			if (row['운송장번호']) {
+				const id = row['운송장번호'].trim()
 				const value = row['고지 금액'].replace(/,/g, '')
 				tax[id] = parseInt(value)
 			}
 		})
 
 		lotteCardRaw.forEach((row) => {
-			const id = row['승인번호'].trim()
+			if (!row['승인번호']) return
+			const id = row['승인번호'].trim().padStart(6, '0')
 			const value = parseInt(row['승인금액'].replace(/,/g, ''))
 			const isCanceled = row['매출취소 여부'] === 'Y'
 
 			lotteCardRefund[id] = 0
 
-			if (value < 0) {
-				lotteCard[id] = -value
+			if (value < 0 && isCanceled) {
 				lotteCardRefund[id] = value
 			} else if (value > 0) {
 				lotteCard[id] = value
-				if (isCanceled) lotteCardRefund[id] = -value
 			}
 		})
 
 		lotteCardExtraRaw.forEach((row) => {
-			const id = row['승인번호'].trim()
+			if (!row['승인번호']) return
+			const id = row['승인번호'].trim().padStart(6, '0')
 			const value = parseInt(row['승인금액'].replace(/,/g, ''))
-			const isCanceled = ['매입취소', '전액승인취소'].includes(row['승인구분'])
+			const isCanceled = ['전액승인취소'].includes(row['승인구분'])
 
 			if (lotteCardRefund[id] === undefined) lotteCardRefund[id] = 0
 
-			if (value > 0) {
-				lotteCardExtra[id] = value
-				if (isCanceled && (lotteCardRefund[id] === 0 || lotteCardRefund[id] === undefined)) {
-					lotteCardRefund[id] = -value
-				}
+			if (isCanceled) {
+				lotteCardRefund[id] = -lotteCard[id]
 			} else {
-				lotteCardExtra[id] = -value
-				if (isCanceled && (lotteCardRefund[id] === 0 || lotteCardRefund[id] === undefined)) {
-					lotteCardRefund[id] = value
-				}
+				lotteCardExtra[id] = value
 			}
 		})
 
 		samsungCardRaw.forEach((row) => {
-			const id = row['승인번호'].trim()
+			const id = row['승인번호'].trim().padStart(6, '0')
 			const value = parseInt(row['거래금액(원화)'].replace(/,/g, ''))
 			const isCanceled = row['승인취소여부'] === 'Y'
 
 			samsungCardRefund[id] = 0
 
-			if (value < 0) {
-				samsungCard[id] = -value
+			if (value < 0 && isCanceled) {
 				samsungCardRefund[id] = value
-			} else if (value > 0) {
+			} else if (value > 0 && !isCanceled) {
 				samsungCard[id] = value
-				if (isCanceled) samsungCardRefund[id] = -value
 			}
 		})
 
@@ -182,6 +166,7 @@ export class OrderActualFeed implements iFeed {
                  ccc.idx                                                      AS cardCompanyId,
                  ccc.name                                                     AS cardCompanyName,
                  io.vendor_order_number                                       AS vendorOrderNumber,
+                 fsa.id                                                       AS shopAccount,
                  io.card_approval_number                                      AS cardApprovalNumber,
                  io.origin_amount                                             AS originAmount,
                  (SELECT SUM(io.origin_amount)
@@ -351,6 +336,7 @@ export class OrderActualFeed implements iFeed {
                  so.status                                                    AS shopStatus,
                  scc.name                                                     AS shippingCompany,
                  io.invoice                                                   AS invoice,
+                 io.waypoint_invoice                                          AS waypointInvoice,
                  (SELECT JSON_ARRAYAGG(opcl.data)
                   FROM commerce.order_pay_cancel_log opcl
                   WHERE opcl.fetching_order_number = fo.fetching_order_number
@@ -390,7 +376,7 @@ export class OrderActualFeed implements iFeed {
                            JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
                            JOIN shop_price sp2 ON so2.shop_id = sp2.idx
                            JOIN delivery_method dm2 on so2.delivery_method = dm2.idx
-                  WHERE so2.fetching_order_number = fo.fetching_order_number
+                  WHERE io2.item_order_number = io.item_order_number
                     AND io2.deleted_at IS NULL)                               AS itemPayAmountDetail,
                  io.inherited_shop_coupon_discount_amount                     AS inheritedShopCouponDiscountAmount,
                  io.inherited_order_coupon_discount_amount                    AS inheritedOrderCouponDiscountAmount,
@@ -407,6 +393,7 @@ export class OrderActualFeed implements iFeed {
                            and refund.fetching_order_number = fo.fetching_order_number
                      )                                                        AS taxRefunded,
                  iot.total_tax                                                AS totalTax,
+                 iot.tax_paid                                                 AS isTaxPaid,
                  so.is_ddp_service                                            AS isDDP,
                  weight                                                       AS weight,
                  imc.idx                                                      AS ibpManageCode,
@@ -420,6 +407,7 @@ export class OrderActualFeed implements iFeed {
                   LIMIT 1)                                                    AS assignee,
                  iocm.amount                                                  AS affiliateFee,
                  oci.item_order_number IS NOT NULL                            AS isCanceled,
+                 orefi.item_order_number IS NOT NULL                          AS isRefunded,
                  oreti.item_order_number IS NOT NULL                          AS isReturned
           FROM commerce.fetching_order fo
               JOIN commerce.shop_order so
@@ -435,6 +423,7 @@ export class OrderActualFeed implements iFeed {
               LEFT JOIN commerce.order_refund_item orefi ON orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT'
               LEFT JOIN commerce.order_refund oref ON orefi.order_refund_number = oref.order_refund_number
               LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
+              LEFT JOIN commerce.fetching_shop_account fsa ON io.fetching_shop_account_id = fsa.idx
               LEFT JOIN commerce.shipping_company_code scc ON scc.code = io.shipping_code
               LEFT JOIN commerce.credit_card_company ccc ON ccc.idx = io.card_company_id
               JOIN commerce.user u ON fo.user_id = u.idx
@@ -545,22 +534,25 @@ export class OrderActualFeed implements iFeed {
 			const cardApprovalNumberList =
 				row.cardApprovalNumber?.split(',') ?? []
 
-			const cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
+			let cardPurchaseValue = cardApprovalNumberList.reduce((acc, e) => {
+				const cardApprovalNumber = e.trim()
+
+				const value =
+					(row.cardCompanyName === '삼성카드' ? samsungCard[cardApprovalNumber] : (lotteCard[cardApprovalNumber] || lotteCardExtra[cardApprovalNumber])) || 0
+
+				return value + acc
+			}, 0)
+			if (cardApprovalNumberList.length && !cardPurchaseValue)
+				cardPurchaseValue = '이슈'
+
+			let cardRefundValue = cardApprovalNumberList.reduce((acc, e) => {
 				const cardApprovalNumber = e.trim()
 
 				const refund = row.cardCompanyName === '삼성카드' ? samsungCardRefund[cardApprovalNumber] || 0 : lotteCardRefund[cardApprovalNumber] || 0
 
 				return refund + acc
 			}, 0)
-
-			let cardPurchaseValue = cardApprovalNumberList.reduce((acc, e) => {
-				const cardApprovalNumber = e.trim()
-
-				const value =
-					(row.cardCompanyName === '삼성카드' ? samsungCard[cardApprovalNumber] : lotteCard[cardApprovalNumber] || lotteCardExtra[cardApprovalNumber]) || 0
-
-				return value + acc
-			}, 0)
+			if ((row.isCanceled || row.isReturned) && cardApprovalNumberList.length && !cardRefundValue) cardRefundValue = '이슈'
 
 			const itemPriceData: any = {}
 			const itemPriceDataCanceled: any = {}
@@ -621,19 +613,25 @@ export class OrderActualFeed implements iFeed {
 
 					currentItemPriceData['WAYPOINT_FEE'] = waypointFee
 					if (itemPriceData['WAYPOINT_FEE'])
-						itemPriceData['WAYPOINT_FEE'] = waypointFee
+						itemPriceData['WAYPOINT_FEE'] += waypointFee
 					else itemPriceData['WAYPOINT_FEE'] = waypointFee
 				}
 			})
+			// 반품이 되지 않았거나, 국내 배송이 되고 반품이 됐거나
+			let taxTotal = (row.isTaxPaid ? row.totalTax : 0) || tax[`${row.invoice?.trim()}`] || 0
+			if (!row.isDDP && !row.isCanceled && localStatus.includes(row.status) && row.totalTax && !row.isTaxPaid && !tax[`${row.invoice?.trim()}`]) {
+				taxTotal = '이슈'
+			}
 
-			const taxTotal = row.totalTax || tax[row.itemOrderNumber] || tax[row.fetching_order_number] || 0
-
-			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] - itemPriceData['DEDUCTED_VAT'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) + (itemPriceData['WAYPOINT_FEE'] ?? 0)
+			let fasstoPurchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) - itemPriceData['DEDUCTED_VAT'] + itemPriceData['WAYPOINT_FEE']
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
 
-			if (row.cardApprovalNumber === '파스토') cardPurchaseValue = purchaseValue
+			if (row.cardApprovalNumber === '파스토') {
+				cardPurchaseValue = fasstoPurchaseValue
+				if (row.isRefunded) cardRefundValue = -fasstoPurchaseValue
+			}
 
-			let waypointDeliveryFee = parseInt(eldex[row.invoice] ?? '0')
+			let waypointDeliveryFee: any = parseInt(eldex[row.invoice?.trim()] ?? '0')
 
 			if (row.ibpManageCode) {
 				waypointDeliveryFee = Math.round((ibp[row.ibpManageCode] ?? 0) * currencyRate)
@@ -641,8 +639,9 @@ export class OrderActualFeed implements iFeed {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			}
 
-			let deductedVat = 0
+			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.status)) waypointDeliveryFee = '이슈'
 
+			let deductedVat = 0
 			if (row.ibpManageCode) {
 				deductedVat = Math.round(parseFloat(vatRefund[row.ibpManageCode] ?? '0') * currencyRate)
 			}
@@ -695,16 +694,17 @@ export class OrderActualFeed implements iFeed {
 			}
 
 			const data = {
-				주문일: DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
+				'주문일': DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss'),
 				'주문 상태': row.itemOrderStatus,
 				'상품별 주문번호': row.itemOrderNumber,
 				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
 				'전체 주문번호': row.fetching_order_number,
 				'전체 주문 상태': Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', '),
 				'편집샵 매입 주문번호': row.vendorOrderNumber,
+				'발주 계정': row.shopAccount,
 				'카드사': row.cardCompanyName,
 				'운송 업체': row.shippingCompany,
-				'운송장 번호': row.invoice,
+				'운송장 번호': row.invoice?.trim(),
 				'배송 유형': row.deliveryMethod,
 				'세금 부과 방식': row.isDDP ? 'DDP' : 'DDU',
 				'편집샵명': row.shopName,
@@ -723,7 +723,7 @@ export class OrderActualFeed implements iFeed {
 				'실 결제 금액': row.payAmount,
 				'차액 결제 금액': row.additionalPayAmount,
 				'결제 환불 금액': refundAmount,
-				'관부가세 환급': refundAmount && cardPurchaseValue ? row.totalTax : 0,
+				'관부가세 환급': refundAmount && cardPurchaseValue ? taxTotal : 0,
 				'페칭 수수료 취소': canceledFetchingFee,
 				'부가세 환급 취소': canceledDeductedVat,
 				'부가세 환급 수수료 취소': canceledWaypointFee,
@@ -734,7 +734,7 @@ export class OrderActualFeed implements iFeed {
 				'해외 반품 비용': row.overseasExtraCharge,
 				'보상 적립금': row.pointByIssue,
 				'수선 비용': row.repairExtraCharge,
-				'매입 환출 금액': -cardRefundValue,
+				'매입 환출 금액': isNaN(-cardRefundValue) ? cardRefundValue : -cardRefundValue,
 				'반품 수수료': row.returnFee,
 				'제휴 수수료': row.affiliateFee
 			}
@@ -789,7 +789,7 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '1월.csv',
@@ -865,7 +865,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
 		console.log(
 			await S3Client.upload({
