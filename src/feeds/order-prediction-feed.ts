@@ -11,30 +11,39 @@ import {MySQL, S3Client} from '../utils'
 import {iFeed} from './feed'
 
 export class OrderPredictionFeed implements iFeed {
-	async getTsvBufferWithRange(start: Date, end: Date, targetSheetId = null): Promise<Buffer> {
-		return Buffer.from(await this.getTsv({start, end, targetSheetId}), 'utf-8')
+	async getTsvBufferWithRange(start: Date, end: Date, targetDocId = null, targetSheetId = null): Promise<Buffer> {
+		return Buffer.from(await this.getTsv({start, end, targetDocId, targetSheetId}), 'utf-8')
 	}
 
 	async getTsvBuffer(): Promise<Buffer> {
 		return Buffer.from(await this.getTsv({start: null, end: null}), 'utf-8')
 	}
 
-	async getTsv({start, end, targetSheetId}: { start: Date, end: Date, targetSheetId?: string }): Promise<string> {
+	async getTsv({start, end, targetDocId = '1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4', targetSheetId}: { start: Date, end: Date, targetDocId?: string, targetSheetId?: string }): Promise<string> {
 		const beforeShippingStatus = ['BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED', 'ORDER_COMPLETE', 'ORDER_DELAY', 'ORDER_DELAY_IN_SHOP', 'PRODUCT_PREPARE']
 		const overseasStatus = ['SHIPPING_START', 'IN_WAYPOINT_SHIPPING', 'WAYPOINT_ARRIVAL']
 		const localStatus = ['DOMESTIC_CUSTOMS_CLEARANCE', 'CUSTOMS_CLEARANCE_DELAY', 'IN_DOMESTIC_SHIPPING', 'SHIPPING_COMPLETE', 'ORDER_CONFIRM']
 
-		const targetDoc = new GoogleSpreadsheet(
+		const dataDoc = new GoogleSpreadsheet(
 			'1hmp69Ej9Gr4JU1KJ6iHO-iv1Tga5lMyp8NO5-yRDMlU'
 		)
 
+		const targetDoc = new GoogleSpreadsheet(
+			targetDocId
+		)
+
 		/* eslint-disable camelcase */
+		await dataDoc.useServiceAccountAuth({
+			client_email: sheetData.client_email,
+			private_key: sheetData.private_key,
+		})
 		await targetDoc.useServiceAccountAuth({
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
 		})
 		/* eslint-enable camelcase */
 
+		await dataDoc.loadInfo()
 		await targetDoc.loadInfo()
 
 		const data = await MySQL.execute(
@@ -602,154 +611,12 @@ export class OrderPredictionFeed implements iFeed {
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
-				fileName: '1월_추정.csv',
+				fileName: '2023년_1월_추정.csv',
 				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-01-01T00:00:00.000Z'),
-					new Date('2022-02-01T00:00:00.000Z'),
-					'1578509603'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-02-01T00:00:00.000Z'),
-					new Date('2022-03-01T00:00:00.000Z'),
-					'601565629'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '3월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-03-01T00:00:00.000Z'),
-					new Date('2022-04-01T00:00:00.000Z'),
-					'1426081800'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '4월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-04-01T00:00:00.000Z'),
-					new Date('2022-05-01T00:00:00.000Z'),
-					'1475979426'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '5월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-05-01T00:00:00.000Z'),
-					new Date('2022-06-01T00:00:00.000Z'),
-					'2014184837'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '6월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-06-01T00:00:00.000Z'),
-					new Date('2022-07-01T00:00:00.000Z'),
-					'1314596413'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '7월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-07-01T00:00:00.000Z'),
-					new Date('2022-08-01T00:00:00.000Z'),
-					'325810291'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '8월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-08-01T00:00:00.000Z'),
-					new Date('2022-09-01T00:00:00.000Z'),
-					'1985712996'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '9월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-09-01T00:00:00.000Z'),
-					new Date('2022-10-01T00:00:00.000Z'),
-					'1195269707'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '10월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-10-01T00:00:00.000Z'),
-					new Date('2022-11-01T00:00:00.000Z'),
-					'1680119655'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '11월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-11-01T00:00:00.000Z'),
-					new Date('2022-12-01T00:00:00.000Z'),
-					'1939056953'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '12월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-12-01T00:00:00.000Z'),
 					new Date('2023-01-01T00:00:00.000Z'),
-					'1023661014'
+					new Date('2023-02-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1578509603'
 				),
 				contentType: 'text/csv',
 			})

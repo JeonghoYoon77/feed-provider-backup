@@ -11,15 +11,15 @@ import {MySQL, S3Client} from '../utils'
 import {iFeed} from './feed'
 
 export class OrderActualFeed implements iFeed {
-	async getTsvBufferWithRange(start: Date, end: Date, targetSheetId = null): Promise<Buffer> {
-		return Buffer.from(await this.getTsv({start, end, targetSheetId}), 'utf-8')
+	async getTsvBufferWithRange(start: Date, end: Date, targetDocId = null, targetSheetId = null): Promise<Buffer> {
+		return Buffer.from(await this.getTsv({start, end, targetSheetId, targetDocId}), 'utf-8')
 	}
 
 	async getTsvBuffer(): Promise<Buffer> {
 		return Buffer.from(await this.getTsv({start: null, end: null}), 'utf-8')
 	}
 
-	async getTsv({start, end, targetSheetId}: { start: Date, end: Date, targetSheetId?: string }): Promise<string> {
+	async getTsv({start, end, targetSheetId, targetDocId = '1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4'}: { start: Date, end: Date, targetSheetId?: string, targetDocId?: string }): Promise<string> {
 		const beforeShippingStatus = ['BEFORE_DEPOSIT', 'ORDER_AVAILABLE', 'ORDER_WAITING', 'PRE_ORDER_REQUIRED', 'ORDER_COMPLETE', 'ORDER_DELAY', 'ORDER_DELAY_IN_SHOP', 'PRODUCT_PREPARE']
 		const overseasStatus = ['SHIPPING_START', 'IN_WAYPOINT_SHIPPING', 'WAYPOINT_ARRIVAL']
 		const localStatus = ['DOMESTIC_CUSTOMS_CLEARANCE', 'CUSTOMS_CLEARANCE_DELAY', 'IN_DOMESTIC_SHIPPING', 'SHIPPING_COMPLETE', 'ORDER_CONFIRM']
@@ -28,12 +28,19 @@ export class OrderActualFeed implements iFeed {
 		const vatRefundDoc = new GoogleSpreadsheet(
 			'1k2ZGGVr1blw8QF9fxQ-80mbgThq8mcFayfaWGRoWacY'
 		)
-		const targetDoc = new GoogleSpreadsheet(
+		const dataDoc = new GoogleSpreadsheet(
 			'1hmp69Ej9Gr4JU1KJ6iHO-iv1Tga5lMyp8NO5-yRDMlU'
+		)
+		const targetDoc = new GoogleSpreadsheet(
+			targetDocId
 		)
 
 		/* eslint-disable camelcase */
 		await vatRefundDoc.useServiceAccountAuth({
+			client_email: sheetData.client_email,
+			private_key: sheetData.private_key,
+		})
+		await dataDoc.useServiceAccountAuth({
 			client_email: sheetData.client_email,
 			private_key: sheetData.private_key,
 		})
@@ -45,13 +52,14 @@ export class OrderActualFeed implements iFeed {
 
 		await targetDoc.loadInfo()
 		await vatRefundDoc.loadInfo()
+		await dataDoc.loadInfo()
 
-		const ibpSheet = targetDoc.sheetsById['325601058'] // IBP 배송 비용
-		const eldexSheet = targetDoc.sheetsById['980121221'] // 엘덱스 배송 비용
-		const lotteCardSheet = targetDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
-		const lotteCardExtraSheet = targetDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
-		const samsungCardSheet = targetDoc.sheetsById['880709363'] // 삼성카드 매출내역
-		const taxSheet = targetDoc.sheetsById['159377898']
+		const ibpSheet = dataDoc.sheetsById['325601058'] // IBP 배송 비용
+		const eldexSheet = dataDoc.sheetsById['980121221'] // 엘덱스 배송 비용
+		const lotteCardSheet = dataDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
+		const lotteCardExtraSheet = dataDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
+		const samsungCardSheet = dataDoc.sheetsById['880709363'] // 삼성카드 매출내역
+		const taxSheet = dataDoc.sheetsById['159377898']
 
 		const eldexRaw = await eldexSheet.getRows()
 		const ibpRaw = await ibpSheet.getRows()
@@ -203,13 +211,15 @@ export class OrderActualFeed implements iFeed {
                            JOIN commerce.order_additional_pay_item oapi
                                 ON oapi.order_additional_number = oap.order_additional_number AND
                                    oapi.status = 'PAID'
-                  WHERE oap.fetching_order_number = fo.fetching_order_number) AS additionalPayInfo,
+                  JOIN commerce.order_additional_pay_log oapl ON oapi.additional_item_number = oapl.additional_item_number
+                  JOIN commerce.order_additional_pay_log_item_map oaplim ON oapl.idx = oaplim.log_id
+                  WHERE oaplim.item_order_number = io.item_order_number) AS additionalPayInfo,
                  fo.status,
                  fo.order_path,
                  fo.pay_method,
                  (SELECT JSON_ARRAYAGG(status)
                   FROM (SELECT case
-                                   when ori2.status = 'ACCEPT'
+                                   when ori2.return_item_number is not null
                                        then '반품'
                                    when ori2.status = 'IN_PROGRESS'
                                        then '반품 진행 중'
@@ -260,10 +270,12 @@ export class OrderActualFeed implements iFeed {
                                             ON so2.fetching_order_number = fo2.fetching_order_number
                                  left join commerce.order_cancel_item oci2
                                            on io2.item_order_number = oci2.item_order_number AND
-                                              oci2.status = 'ACCEPT'
+                                              oci2.status = 'ACCEPT' AND
+                                              oci2.deleted_at IS NULL
                                  left join commerce.order_return_item ori2
                                            on io2.item_order_number = ori2.item_order_number AND
-                                              ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT')
+                                              ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT') AND
+                                              ori2.deleted_at IS NULL
                         WHERE so2.fetching_order_number = fo.fetching_order_number
                           AND io2.deleted_at IS NULL
                         GROUP BY io2.item_order_number) t)                    AS itemStatusList,
@@ -294,6 +306,10 @@ export class OrderActualFeed implements iFeed {
                  case
                      when oreti.return_item_number is not null
                          then '반품'
+                     when oreti.status = 'IN_PROGRESS'
+                         then '반품 진행 중'
+                     when oreti.status = 'HOLD'
+                         then '반품 보류'
                      when oci.cancel_item_number is not null
                          then '주문 취소'
                      when fo.status = 'COMPLETE'
@@ -334,6 +350,7 @@ export class OrderActualFeed implements iFeed {
                      end                                                      AS itemOrderStatus,
                  fo.status                                                    AS orderStatus,
                  so.status                                                    AS shopStatus,
+                 io.status                                                    AS itemStatus,
                  scc.name                                                     AS shippingCompany,
                  io.invoice                                                   AS invoice,
                  io.waypoint_invoice                                          AS waypointInvoice,
@@ -408,19 +425,19 @@ export class OrderActualFeed implements iFeed {
                  iocm.amount                                                  AS affiliateFee,
                  oci.item_order_number IS NOT NULL                            AS isCanceled,
                  orefi.item_order_number IS NOT NULL                          AS isRefunded,
-                 oreti.item_order_number IS NOT NULL                          AS isReturned
+                 oreti.status = 'ACCEPT'                                      AS isReturned
           FROM commerce.fetching_order fo
               JOIN commerce.shop_order so
           ON fo.fetching_order_number = so.fetching_order_number
               JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
-              LEFT JOIN commerce.order_cancel_item oci ON io.item_order_number = oci.item_order_number AND oci.status = 'ACCEPT'
+              LEFT JOIN commerce.order_cancel_item oci ON io.item_order_number = oci.item_order_number AND oci.status = 'ACCEPT' AND oci.deleted_at IS NULL
               LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
-              LEFT JOIN commerce.order_return_item oreti ON oreti.item_order_number = io.item_order_number AND oreti.status = 'ACCEPT'
+              LEFT JOIN commerce.order_return_item oreti ON oreti.item_order_number = io.item_order_number AND oreti.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT') AND oreti.deleted_at IS NULL
               LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
               LEFT JOIN commerce.order_return_extra_charge oretec_D ON oretec_D.order_return_number = oret.order_return_number AND oretec_D.reason_type = 'DOMESTIC_RETURN'
               LEFT JOIN commerce.order_return_extra_charge oretec_O ON oretec_O.order_return_number = oret.order_return_number AND oretec_O.reason_type = 'OVERSEAS_RETURN'
               LEFT JOIN commerce.order_return_extra_charge oretec_R ON oretec_R.order_return_number = oret.order_return_number AND oretec_R.reason_type = 'REPAIR'
-              LEFT JOIN commerce.order_refund_item orefi ON orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT'
+              LEFT JOIN commerce.order_refund_item orefi ON orefi.item_order_number = io.item_order_number AND orefi.status = 'ACCEPT' AND orefi.deleted_at IS NULL
               LEFT JOIN commerce.order_refund oref ON orefi.order_refund_number = oref.order_refund_number
               LEFT JOIN commerce.order_delivery od ON od.fetching_order_number = fo.fetching_order_number
               LEFT JOIN commerce.fetching_shop_account fsa ON io.fetching_shop_account_id = fsa.idx
@@ -619,7 +636,7 @@ export class OrderActualFeed implements iFeed {
 			})
 			// 반품이 되지 않았거나, 국내 배송이 되고 반품이 됐거나
 			let taxTotal = (row.isTaxPaid ? row.totalTax : 0) || tax[`${row.invoice?.trim()}`] || 0
-			if (!row.isDDP && !row.isCanceled && localStatus.includes(row.status) && row.totalTax && !row.isTaxPaid && !tax[`${row.invoice?.trim()}`]) {
+			if (!row.isDDP && !row.isCanceled && localStatus.includes(row.itemStatus) && row.totalTax && !row.isTaxPaid && !tax[`${row.invoice?.trim()}`]) {
 				taxTotal = '이슈'
 			}
 
@@ -638,12 +655,17 @@ export class OrderActualFeed implements iFeed {
 			} else if (row.weight) {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			}
+			if (row.fetching_order_number === '20221222-0000020') console.log(row.ibpManageCode, ibp[row.ibpManageCode], waypointDeliveryFee)
 
-			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.status)) waypointDeliveryFee = '이슈'
+			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.itemStatus)) waypointDeliveryFee = '이슈'
 
-			let deductedVat = 0
+			let deductedVat: any = 0
 			if (row.ibpManageCode) {
 				deductedVat = Math.round(parseFloat(vatRefund[row.ibpManageCode] ?? '0') * currencyRate)
+			}
+
+			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && row.cardApprovalNumber !== '파스토') {
+				deductedVat = '이슈'
 			}
 
 			let waypointFee = 0
@@ -654,7 +676,7 @@ export class OrderActualFeed implements iFeed {
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
 
-			if ((row.isCanceled && !localStatus.includes(row.status)) || row.isReturned) {
+			if ((row.isCanceled && !localStatus.includes(row.itemStatus)) || row.isReturned) {
 				canceledDeductedVat = deductedVat
 				canceledWaypointFee = waypointFee
 			}
@@ -750,7 +772,7 @@ export class OrderActualFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (['운송료'].includes(key)) continue
+					if (['운송료'].includes(key) && rows[i]['운송료']) continue
 					if (['수동 확인 필요'].includes(feed[i][key])) continue
 					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key]) && rows[i][key] === '' && (isNil(feed[i][key]) || feed[i][key] === '')) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
@@ -764,7 +786,6 @@ export class OrderActualFeed implements iFeed {
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
-					console.log(feed[i]['상품별 주문번호'], key, feed[i][key])
 					cell.value = feed[i][key]
 					hasModified = true
 				}
@@ -789,157 +810,15 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		/*console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '1월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-01-01T00:00:00.000Z'),
-					new Date('2022-02-01T00:00:00.000Z'),
-					'774838589'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
-				fileName: '2월.csv',
+				fileName: '2023년 1월.csv',
 				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-02-01T00:00:00.000Z'),
-					new Date('2022-03-01T00:00:00.000Z'),
-					'1950994764'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '3월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-03-01T00:00:00.000Z'),
-					new Date('2022-04-01T00:00:00.000Z'),
-					'330893985'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '4월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-04-01T00:00:00.000Z'),
-					new Date('2022-05-01T00:00:00.000Z'),
-					'2089161848'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '5월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-05-01T00:00:00.000Z'),
-					new Date('2022-06-01T00:00:00.000Z'),
-					'1009926644'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '6월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-06-01T00:00:00.000Z'),
-					new Date('2022-07-01T00:00:00.000Z'),
-					'1304014481'
-				),
-				contentType: 'text/csv',
-			})
-		)*/
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '7월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-07-01T00:00:00.000Z'),
-					new Date('2022-08-01T00:00:00.000Z'),
-					'437467632'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '8월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-08-01T00:00:00.000Z'),
-					new Date('2022-09-01T00:00:00.000Z'),
-					'241586790'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '9월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-09-01T00:00:00.000Z'),
-					new Date('2022-10-01T00:00:00.000Z'),
-					'1947643951'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '10월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-10-01T00:00:00.000Z'),
-					new Date('2022-11-01T00:00:00.000Z'),
-					'147779322'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '11월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-11-01T00:00:00.000Z'),
-					new Date('2022-12-01T00:00:00.000Z'),
-					'1352253972'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '12월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2022-12-01T00:00:00.000Z'),
 					new Date('2023-01-01T00:00:00.000Z'),
-					'1237354903'
+					new Date('2023-02-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'774838589'
 				),
 				contentType: 'text/csv',
 			})
