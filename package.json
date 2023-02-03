@@ -30,7 +30,8 @@
     "lodash": "^4.17.21",
     "luxon": "^3.0.1",
     "moment": "^2.29.1",
-    "mysql2": "^2.2.5"
+    "mysql2": "^2.2.5",
+    "xml2js": "^0.4.23"
   },
   "devDependencies": {
     "@types/google-spreadsheet": "^3.0.2",
@@ -39,6 +40,7 @@
     "@types/lodash": "^4.14.168",
     "@types/luxon": "^3.0.0",
     "@types/node": "^17.0.20",
+    "@types/xml2js": "^0.4.11",
     "@typescript-eslint/eslint-plugin": "^4.8.1",
     "@typescript-eslint/parser": "^4.8.1",
     "eslint": "^7.13.0",

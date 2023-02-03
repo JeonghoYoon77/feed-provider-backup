@@ -10,6 +10,7 @@ import {
 	PiclickFeed,
 	OrderFeed, OrderActualFeed, OrderPredictionFeed, CroketFeed,
 } from './feeds'
+import {CoochaFeed} from './feeds/coocha-feed'
 
 program.version(version)
 program.option('-f, --feed-name <feedName>', '피드 이름')
@@ -44,6 +45,10 @@ async function main() {
 		'PICLICK-FEED': async () => {
 			const piclickFeed = new PiclickFeed()
 			await piclickFeed.upload()
+		},
+		'COOCHA-FEED': async () => {
+			const coochaFeed = new CoochaFeed()
+			await coochaFeed.upload()
 		},
 		'CROKET-FEED': async () => {
 			const croketFeed = new CroketFeed()
