@@ -99,13 +99,13 @@ export class CoochaFeed implements iFeed {
 			           LIMIT 1
 			       ) AS 'category_name3',
              (
-                 SELECT fc.idx
+                 SELECT fc.coocha_cname
                  FROM fetching_category fc
                           JOIN item_category_map icm on fc.idx = icm.fetching_category_id
                  WHERE icm.item_id = ii.idx
                    AND fc.fetching_category_depth = 2
                  LIMIT 1
-             ) AS 'category_id3',
+             ) AS 'category_cname',
 			       (
 			           SELECT SUBSTRING_INDEX(GROUP_CONCAT(CONCAT(i.size_name, '^', CEIL((ip.final_price + IFNULL(i.optional_price, 0)) * 0.97 / 100) * 100) SEPARATOR '|'), ',', 10)
 			           FROM item_size i
@@ -180,39 +180,41 @@ export class CoochaFeed implements iFeed {
 			'static.fetchingapp.co.kr/resize/naver',
 		)
 
+		const [category1, category2, category3, category4] = row.category_cname?.split(',') ?? []
+
 		return {
 			'product_id': CoochaFeed.makeCdata(row.id),
 			'product_title': CoochaFeed.makeCdata(title),
 			'product_desc': CoochaFeed.makeCdata(row.description),
 			'product_url': CoochaFeed.makeCdata(pcLink),
 			'mobile_url': CoochaFeed.makeCdata(mobileLink),
-			'sale_start': CoochaFeed.makeCdata(moment().format('yyyy-MM-dd HH:mm:ss')),
-			'sale_end': CoochaFeed.makeCdata(moment().add(2, 'days').format('yyyy-MM-dd HH:mm:ss')),
+			'sale_start': CoochaFeed.makeCdata(moment().format('yyyy-MM-DD HH:mm:ss')),
+			'sale_end': CoochaFeed.makeCdata(moment().add(2, 'days').format('yyyy-MM-DD HH:mm:ss')),
 			'price_normal': CoochaFeed.makeCdata(row.iop_final_price),
 			'price_discount': CoochaFeed.makeCdata(price),
 			'discount_rate': CoochaFeed.makeCdata(Math.round((1 - price / row.iop_final_price) * 100)),
-			'coupon_use_start': '<![CDATA[]]>',
-			'coupon_use_end': '<![CDATA[]]>',
+			'coupon_use_start': '',
+			'coupon_use_end': '',
 			categorys: {
 				category: {
-					category1: CoochaFeed.makeCdata(row.category_name1),
-					category2: CoochaFeed.makeCdata(row.category_name2),
-					category3: CoochaFeed.makeCdata(row.category_name3),
-					category4: '<![CDATA[]]>',
+					category1: category1 ?? '',
+					category2: category2 ?? '',
+					category3: category3 ?? '',
+					category4: category4 ?? '',
 				},
 			},
-			'buy_limit': '<![CDATA[0]]>',
-			'buy_max': '<![CDATA[999999]]>',
-			'buy_count': '<![CDATA[0]]>',
+			'buy_limit': '0',
+			'buy_max': '999999',
+			'buy_count': '0',
 			'free_shipping': constants.shipping(),
 			'image_url1': CoochaFeed.makeCdata(row.image_link),
 			shops: {
 				shop: {
-					'shop_name': '<![CDATA[]]>',
-					'shop_tel': '<![CDATA[]]>',
-					'shop_address': '<![CDATA[]]>',
-					'shop_latitude': '<![CDATA[]]>',
-					'shop_longitude': '<![CDATA[]]>',
+					'shop_name': '',
+					'shop_tel': '',
+					'shop_address': '',
+					'shop_latitude': '',
+					'shop_longitude': '',
 				}
 			},
 			'm_dcratio': CoochaFeed.makeCdata(Math.round((1 - priceMobile / row.iop_final_price) * 100)),
@@ -222,6 +224,6 @@ export class CoochaFeed implements iFeed {
 
 	private static makeCdata(string: any): string {
 		string = `${string}`.replace(/[\0-\x08\x0B\f\x0E-\x1F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/, '')
-		return `<![CDATA[${string}]]>`
+		return string
 	}
 }
