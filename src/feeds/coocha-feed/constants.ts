@@ -1,5 +1,5 @@
 class Constants {
-  private _limit: number = 100000
+  private _limit: number = 500000
   private _address: string = 'https://fetching.co.kr/product/'
   private _condition: string = '신상품'
   private _shipping: string = 'F'
