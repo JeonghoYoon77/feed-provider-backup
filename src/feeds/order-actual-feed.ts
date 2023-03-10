@@ -29,7 +29,7 @@ export class OrderActualFeed implements iFeed {
 			'1k2ZGGVr1blw8QF9fxQ-80mbgThq8mcFayfaWGRoWacY'
 		)
 		const dataDoc = new GoogleSpreadsheet(
-			'1hmp69Ej9Gr4JU1KJ6iHO-iv1Tga5lMyp8NO5-yRDMlU'
+			'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4'
 		)
 		const targetDoc = new GoogleSpreadsheet(
 			targetDocId
@@ -819,6 +819,20 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-02-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
 					'774838589'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 2월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-02-01T00:00:00.000Z'),
+					new Date('2023-03-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1905523567'
 				),
 				contentType: 'text/csv',
 			})

@@ -25,7 +25,7 @@ export class OrderPredictionFeed implements iFeed {
 		const localStatus = ['DOMESTIC_CUSTOMS_CLEARANCE', 'CUSTOMS_CLEARANCE_DELAY', 'IN_DOMESTIC_SHIPPING', 'SHIPPING_COMPLETE', 'ORDER_CONFIRM']
 
 		const dataDoc = new GoogleSpreadsheet(
-			'1hmp69Ej9Gr4JU1KJ6iHO-iv1Tga5lMyp8NO5-yRDMlU'
+			'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4'
 		)
 
 		const targetDoc = new GoogleSpreadsheet(
@@ -617,6 +617,20 @@ export class OrderPredictionFeed implements iFeed {
 					new Date('2023-02-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
 					'1578509603'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년_2월_추정.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-02-01T00:00:00.000Z'),
+					new Date('2023-03-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'624806040'
 				),
 				contentType: 'text/csv',
 			})
