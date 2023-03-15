@@ -52,7 +52,7 @@ export class PiclickFeed implements iFeed {
 
 	private static query(limit, skip, bookmark): string {
 		return format(`
-			SELECT ii.idx AS 'id',
+			SELECT STRAIGHT_JOIN ii.idx AS 'id',
 			       ii.shop_id AS shop_id,
 						 ii.item_code AS item_code,
 				
@@ -119,28 +119,6 @@ export class PiclickFeed implements iFeed {
 			           FROM item_size i
 			           WHERE i.item_id = ii.idx
 			       ) AS 'option_detail',
-			       REPLACE(CONCAT_WS('|',
-			           CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), '명품', fc.fetching_category_name),
-			           CONCAT_WS(' ', IF(ii.item_gender = 'W', '여성', '남성'), bi.main_name, fc.fetching_category_name),
-			           (
-			               SELECT bsi.semi_name
-			               FROM brand_semi_name bsi
-			               WHERE bsi.brand_id = bi.brand_id
-			               LIMIT 1
-			           ),
-			           (
-			               SELECT bsi.semi_name
-			               FROM brand_semi_name bsi
-			               WHERE bsi.brand_id = bi.brand_id
-			               LIMIT 1 OFFSET 1
-			           ),
-			           (
-			               SELECT bsi.semi_name
-			               FROM brand_semi_name bsi
-			               WHERE bsi.brand_id = bi.brand_id
-			               LIMIT 1 OFFSET 2
-			      		 )
-			       ), '\t', ' ') AS 'search_tag',
 			       IF(iif.item_id IS NULL, 'Y', 'N') AS import_flag
 			FROM item_info ii
 					JOIN item_show_price isp on ii.idx = isp.item_id
@@ -231,7 +209,7 @@ export class PiclickFeed implements iFeed {
 				'option_detail': row.option_detail.split('\n').filter(str => str).join(' '),
 				gender: tsvFormat.gender(),
 				'includes_vat': constants.includesVat(),
-				'search_tag': searchTag
+				'search_tag': ''
 			}
 		} catch {
 			return null
