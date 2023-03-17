@@ -1,7 +1,7 @@
 import { isEmpty } from 'lodash'
 
 class TSVFormat {
-  private readonly _gender: string
+	private readonly _gender: string
 	private readonly _id: number | string
 	private readonly _productNo: number | string
 	private readonly _shopId: number
@@ -9,7 +9,7 @@ class TSVFormat {
 
 
 	constructor({ itemGender, id, shopId, productNo }) {
-  	this._gender = itemGender === 'W' ? '여성' : '남성'
+		this._gender = itemGender === 'W' ? '여성' : '남성'
 		this._id = id
 		this._shopId = shopId
 		this._productNo = productNo
@@ -44,7 +44,7 @@ class TSVFormat {
 	}
 
 	public gender() {
-  	return this._gender
+		return this._gender
 	}
 
 	public color(customColor: string) {
@@ -57,8 +57,8 @@ class TSVFormat {
 	}
 
 	public searchTag({brandName, brandNameKor, categoryName2, categoryName3, color, designerStyleId, originName, itemName, brandSemiName, categorySemiName}) {
-  	itemName = itemName.trim()
-  	const tags = [
+		itemName = itemName.trim()
+		const tags = [
 			brandName, brandNameKor, categoryName2, categoryName3, color, designerStyleId, originName, itemName, brandSemiName, categorySemiName
 		]
 		return tags.flat().join('|').split('\n').join('').split(' ').join('')
