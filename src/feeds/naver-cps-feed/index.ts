@@ -44,7 +44,7 @@ export class PiclickFeed implements iFeed {
 
 		const listRaw = await MySQL.execute('SELECT item_id FROM naver_upload_list nul')
 		const list = listRaw.map(row => row.item_id)
-		const chunkedList = chunk(list, 10000)
+		const chunkedList = chunk(list, 100000)
 
 		for (let i in chunkedList) {
 			const data = await MySQL.execute(PiclickFeed.query(chunkedList[i]))
