@@ -2,7 +2,7 @@ import { parse } from 'json2csv'
 import { format } from 'mysql2'
 
 import { iFeed } from '../feed'
-import { MySQL } from '../../utils'
+import {MySQL, MySQLWrite} from '../../utils'
 import { S3Client } from '../../utils'
 import Constants from './constants'
 import TSVFormat from './tsv-format'
@@ -12,7 +12,7 @@ import {chunk} from 'lodash'
 
 const constants = new Constants()
 
-export class PiclickFeed implements iFeed {
+export class NaverCPSFeed implements iFeed {
 	static brandSemiNameMap: any
 	static categorySemiNameMap: any
 
@@ -36,19 +36,30 @@ export class PiclickFeed implements iFeed {
 		try {
 			fs.unlinkSync('./naver-cps-feed.csv')
 		} catch {}
+		fs.writeFileSync('./naver-cps-feed.csv', '')
 		const brandSemiNameRaw = await MySQL.execute('SELECT brand_id AS brandId, JSON_ARRAYAGG(semi_name) AS semiName FROM brand_search_name GROUP BY brand_id')
 		const categorySemiNameRaw = await MySQL.execute('SELECT category AS categoryId, JSON_ARRAYAGG(semi_name) AS semiName FROM category_semi_name GROUP BY category')
 
-		PiclickFeed.brandSemiNameMap = Object.fromEntries(brandSemiNameRaw.map(row => [row.brandId, row.semiName]))
-		PiclickFeed.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
+		NaverCPSFeed.brandSemiNameMap = Object.fromEntries(brandSemiNameRaw.map(row => [row.brandId, row.semiName]))
+		NaverCPSFeed.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
 
 		const listRaw = await MySQL.execute('SELECT item_id FROM naver_upload_list nul')
 		const list = listRaw.map(row => row.item_id)
 		const chunkedList = chunk(list, 100000)
 
+		await MySQLWrite.execute('DELETE FROM naver_upload_item_actual')
+
 		for (let i in chunkedList) {
-			const data = await MySQL.execute(PiclickFeed.query(chunkedList[i]))
-			const tsvData: TSVData[] = (await Promise.all(data.map(PiclickFeed.makeRow))).filter(row => row)
+			const data = await MySQL.execute(NaverCPSFeed.query(chunkedList[i]))
+			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3)
+			const chunkedUpdate = chunk(currentData.map(row => [row.id, row.ip_final_price]))
+			for (const update of chunkedUpdate) {
+				await MySQLWrite.execute(`
+					INSERT INTO naver_upload_item_actual (item_id, final_price)
+					VALUES ?;
+				`, [update])
+			}
+			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverCPSFeed.makeRow))).filter(row => row)
 			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
 			fs.appendFileSync('./naver-cps-feed.csv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
@@ -191,7 +202,7 @@ export class PiclickFeed implements iFeed {
 		})
 		const mobileLink: string = pcLink
 		const searchTag: string = tsvFormat.searchTag({
-			brandName: row.brand_name, brandNameKor: row.brand_name_kor, categoryName2: row.category_name2, categoryName3: row.category_name3, color: tsvFormat.color(row.custom_color), designerStyleId: row.designer_style_id, originName: row.origin_name, itemName: row.item_name, brandSemiName: PiclickFeed.brandSemiNameMap[row.brand_id], categorySemiName: PiclickFeed.categorySemiNameMap[row.category_id3]
+			brandName: row.brand_name, brandNameKor: row.brand_name_kor, categoryName2: row.category_name2, categoryName3: row.category_name3, color: tsvFormat.color(row.custom_color), designerStyleId: row.designer_style_id, originName: row.origin_name, itemName: row.item_name, brandSemiName: NaverCPSFeed.brandSemiNameMap[row.brand_id], categorySemiName: NaverCPSFeed.categorySemiNameMap[row.category_id3]
 		})
 
 		let price = tsvFormat.price(row.ip_final_price)

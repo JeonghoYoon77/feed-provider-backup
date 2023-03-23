@@ -2,11 +2,12 @@ import { parse } from 'json2csv'
 import { format } from 'mysql2'
 
 import { iFeed } from '../feed'
-import { MySQL } from '../../utils'
+import {MySQL, MySQLWrite} from '../../utils'
 import { S3Client } from '../../utils'
 import Constants from './constants'
 import TSVFormat from './tsv-format'
 import TSVData from './tsv-data'
+import {chunk} from 'lodash'
 
 const constants = new Constants()
 
@@ -37,9 +38,18 @@ export class NaverFeed implements iFeed {
 
 		NaverFeed.brandSemiNameMap = Object.fromEntries(brandSemiNameRaw.map(row => [row.brandId, row.semiName]))
 		NaverFeed.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
+		const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3)
+		await MySQLWrite.execute('DELETE FROM naver_upload_item_actual')
 		const tsvData: TSVData[] = await Promise.all(
-			data.filter(row => row.option_detail).map(NaverFeed.makeRow),
+			currentData.map(NaverFeed.makeRow)
 		)
+		const chunkedUpdate = chunk(currentData.map(row => [row.id, row.ip_final_price]))
+		for (const update of chunkedUpdate) {
+			await MySQLWrite.execute(`
+			INSERT INTO naver_upload_item_actual (item_id, final_price)
+			VALUES ?;
+		`, [update])
+		}
 
 		return parse(tsvData, {
 			fields: Object.keys(tsvData[0]),
