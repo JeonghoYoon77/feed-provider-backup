@@ -8,7 +8,7 @@ import {
 	KakaoUpdateFeed,
 	FacebookFeed,
 	PiclickFeed,
-	OrderFeed, OrderActualFeed, OrderPredictionFeed, CroketFeed,
+	OrderFeed, OrderActualFeed, OrderPredictionFeed, CroketFeed, NaverCPSFeed, NaverUpdateFeed,
 } from './feeds'
 import {CoochaFeed} from './feeds/coocha-feed'
 
@@ -21,6 +21,14 @@ async function main() {
 	const feedExecute = {
 		'NAVER-FEED': async () => {
 			const naverFeed = new NaverFeed()
+			await naverFeed.upload()
+		},
+		'NAVER-CPS-FEED': async () => {
+			const naverFeed = new NaverCPSFeed()
+			await naverFeed.upload()
+		},
+		'NAVER-UPDATE-FEED': async () => {
+			const naverFeed = new NaverUpdateFeed()
 			await naverFeed.upload()
 		},
 		'NAVER-SALES-FEED': async () => {
