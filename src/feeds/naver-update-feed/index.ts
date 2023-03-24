@@ -58,7 +58,8 @@ export class NaverUpdateFeed implements iFeed {
 
 		for (let i in chunkedList) {
 			const data = await MySQL.execute(NaverUpdateFeed.query(chunkedList[i]))
-			const tsvData: TSVData[] = (await Promise.all(data.map(NaverUpdateFeed.makeRow))).filter(row => row)
+			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3)
+			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverUpdateFeed.makeRow))).filter(row => row)
 			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
 			fs.appendFileSync('./naver-update-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
@@ -121,12 +122,14 @@ export class NaverUpdateFeed implements iFeed {
 										 JOIN item_category_map icm on fc.idx = icm.fetching_category_id
 							WHERE icm.item_id = ii.idx
 								AND fc.fetching_category_depth = 2
+								AND fc.fetching_category_name != '기타'
 							LIMIT 1)                                                           AS 'category_name3',
 						 (SELECT fc.idx
 							FROM fetching_category fc
 										 JOIN item_category_map icm on fc.idx = icm.fetching_category_id
 							WHERE icm.item_id = ii.idx
 								AND fc.fetching_category_depth = 2
+								AND fc.fetching_category_name != '기타'
 							LIMIT 1)                                                           AS 'category_id3',
 						 (SELECT fc.smartstore_category_id
 							FROM fetching_category fc
@@ -215,10 +218,6 @@ export class NaverUpdateFeed implements iFeed {
 			'fetching-app.s3.ap-northeast-2.amazonaws.com',
 			'static.fetchingapp.co.kr/resize/naver',
 		)
-
-		if (row.id === 4300443) {
-			console.log(searchTag.replace(/\\t/, ''))
-		}
 
 		return {
 			id: `F${row.id}`,
