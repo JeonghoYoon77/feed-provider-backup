@@ -61,7 +61,7 @@ class TSVFormat {
 		const tags = [
 			brandName, brandNameKor, categoryName2, categoryName3, color, designerStyleId, originName, itemName, brandSemiName, categorySemiName
 		]
-		return tags.flat().join('|').split('\n').join('').split(' ').join('')
+		return tags.flat().map(str => str?.replace(/\\t/g, '')?.trim()).filter(str => str).join('|').split('\n').join('').split(' ').join('')
 	}
 
 	price(price: number): number {

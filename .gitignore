@@ -20,3 +20,4 @@ fetching-sheet.json
 **/.aws/credentials
 
 *.csv
+*.tsv

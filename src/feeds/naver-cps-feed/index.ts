@@ -34,9 +34,9 @@ export class NaverCPSFeed implements iFeed {
 
 	async getTsv(delimiter = '\t'): Promise<Buffer> {
 		try {
-			fs.unlinkSync('./naver-cps-feed.csv')
+			fs.unlinkSync('./naver-cps-feed.tsv')
 		} catch {}
-		fs.writeFileSync('./naver-cps-feed.csv', '')
+		fs.writeFileSync('./naver-cps-feed.tsv', '')
 		const brandSemiNameRaw = await MySQL.execute('SELECT brand_id AS brandId, JSON_ARRAYAGG(semi_name) AS semiName FROM brand_search_name GROUP BY brand_id')
 		const categorySemiNameRaw = await MySQL.execute('SELECT category AS categoryId, JSON_ARRAYAGG(semi_name) AS semiName FROM category_semi_name GROUP BY category')
 
@@ -61,14 +61,14 @@ export class NaverCPSFeed implements iFeed {
 			}
 			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverCPSFeed.makeRow))).filter(row => row)
 			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
-			fs.appendFileSync('./naver-cps-feed.csv', parse(tsvData, {
+			fs.appendFileSync('./naver-cps-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
 				header: i === '0',
 				delimiter,
 				quote: '',
 			}))
 		}
-		return fs.readFileSync('./naver-cps-feed.csv')
+		return fs.readFileSync('./naver-cps-feed.tsv')
 	}
 
 	private static query(itemIds): string {
@@ -207,7 +207,7 @@ export class NaverCPSFeed implements iFeed {
 
 		let price = tsvFormat.price(row.ip_final_price)
 		let priceMobile = tsvFormat.priceMobile(row.ip_final_price)
-		let point = Math.floor(price * 0.02)
+		let point = Math.floor(price * 0.01)
 
 		// 이미지 리사이징 버전으로 교체
 		row['image_link'] = row.image_link.replace(
@@ -237,7 +237,7 @@ export class NaverCPSFeed implements iFeed {
 				? tsvFormat.partnerCouponDownload(row.ip_final_price)
 				: '',
 			'interest_free_event':
-				'삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~8',
+				'삼성카드^2~3|현대카드^2~3|BC카드^2~3|KB국민카드^2~3|하나카드^2~3|NH농협카드^2~4|신한카드^2~3',
 			point,
 			'manufacture_define_number': row.designer_style_id || '',
 			'naver_product_id': row.naver_product_id || '',
@@ -248,7 +248,10 @@ export class NaverCPSFeed implements iFeed {
 			'option_detail': row.option_detail
 				?.split('\n')
 				?.filter((str) => str)
-				?.join(' ') ?? '',
+				?.join(' ')
+				?.split('\t')
+				?.filter((str) => str)
+				?.join('') ?? '',
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
 			'search_tag': searchTag,

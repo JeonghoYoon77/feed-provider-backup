@@ -208,7 +208,7 @@ export class NaverFeed implements iFeed {
 
 		let price = tsvFormat.price(row.ip_final_price)
 		let priceMobile = tsvFormat.priceMobile(row.ip_final_price)
-		let point = Math.floor(price * 0.02)
+		let point = Math.floor(price * 0.01)
 
 		// 이미지 리사이징 버전으로 교체
 		row['image_link'] = row.image_link.replace(
@@ -238,7 +238,7 @@ export class NaverFeed implements iFeed {
 				? tsvFormat.partnerCouponDownload(row.ip_final_price)
 				: '',
 			'interest_free_event':
-				'삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~8',
+				'삼성카드^2~3|현대카드^2~3|BC카드^2~3|KB국민카드^2~3|하나카드^2~3|NH농협카드^2~4|신한카드^2~3',
 			point,
 			'manufacture_define_number': row.designer_style_id || '',
 			'naver_product_id': row.naver_product_id || '',

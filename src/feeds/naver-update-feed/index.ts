@@ -35,9 +35,9 @@ export class NaverUpdateFeed implements iFeed {
 
 	async getTsv(delimiter = '\t'): Promise<Buffer> {
 		try {
-			fs.unlinkSync('./naver-update-feed.csv')
+			fs.unlinkSync('./naver-update-feed.tsv')
 		} catch {}
-		fs.writeFileSync('./naver-update-feed.csv', '')
+		fs.writeFileSync('./naver-update-feed.tsv', '')
 		const brandSemiNameRaw = await MySQL.execute('SELECT brand_id AS brandId, JSON_ARRAYAGG(semi_name) AS semiName FROM brand_search_name GROUP BY brand_id')
 		const categorySemiNameRaw = await MySQL.execute('SELECT category AS categoryId, JSON_ARRAYAGG(semi_name) AS semiName FROM category_semi_name GROUP BY category')
 
@@ -60,14 +60,14 @@ export class NaverUpdateFeed implements iFeed {
 			const data = await MySQL.execute(NaverUpdateFeed.query(chunkedList[i]))
 			const tsvData: TSVData[] = (await Promise.all(data.map(NaverUpdateFeed.makeRow))).filter(row => row)
 			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
-			fs.appendFileSync('./naver-update-feed.csv', parse(tsvData, {
+			fs.appendFileSync('./naver-update-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
 				header: i === '0',
 				delimiter,
 				quote: '',
 			}))
 		}
-		return fs.readFileSync('./naver-update-feed.csv')
+		return fs.readFileSync('./naver-update-feed.tsv')
 	}
 
 	private static query(itemIds): string {
@@ -208,13 +208,17 @@ export class NaverUpdateFeed implements iFeed {
 
 		let price = tsvFormat.price(row.ip_final_price)
 		let priceMobile = tsvFormat.priceMobile(row.ip_final_price)
-		let point = Math.floor(price * 0.02)
+		let point = Math.floor(price * 0.01)
 
 		// 이미지 리사이징 버전으로 교체
 		row['image_link'] = row.image_link.replace(
 			'fetching-app.s3.ap-northeast-2.amazonaws.com',
 			'static.fetchingapp.co.kr/resize/naver',
 		)
+
+		if (row.id === 4300443) {
+			console.log(searchTag.replace(/\\t/, ''))
+		}
 
 		return {
 			id: `F${row.id}`,
@@ -238,7 +242,7 @@ export class NaverUpdateFeed implements iFeed {
 				? tsvFormat.partnerCouponDownload(row.ip_final_price)
 				: '',
 			'interest_free_event':
-				'삼성카드^2~6|BC카드^2~7|KB국민카드^2~7|신한카드^2~7|현대카드^2~7|하나카드^2~8|롯데카드^2~4|NH농협카드^2~8',
+				'삼성카드^2~3|현대카드^2~3|BC카드^2~3|KB국민카드^2~3|하나카드^2~3|NH농협카드^2~4|신한카드^2~3',
 			point,
 			'manufacture_define_number': row.designer_style_id || '',
 			'naver_product_id': row.naver_product_id || '',
@@ -249,7 +253,10 @@ export class NaverUpdateFeed implements iFeed {
 			'option_detail': row.option_detail
 				?.split('\n')
 				?.filter((str) => str)
-				?.join(' ') ?? '',
+				?.join(' ')
+				?.split('\t')
+				?.filter((str) => str)
+				?.join('') ?? '',
 			gender: tsvFormat.gender(),
 			'includes_vat': constants.includesVat(),
 			'search_tag': searchTag,
