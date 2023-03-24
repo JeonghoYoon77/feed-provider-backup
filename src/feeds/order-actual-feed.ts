@@ -80,7 +80,7 @@ export class OrderActualFeed implements iFeed {
 		const vatRefund = {}
 
 		eldexRaw.forEach((row) => {
-			const id = row['송장번호']
+			const id = row['국내 택배 송장번호'] || row['송장번호']
 			const value = row['2차결제금액(원)'].replace(/,/g, '')
 			const pgFee = row['PG수수료(원)'].replace(/,/g, '')
 			eldex[id] = parseInt(value) + parseInt(pgFee)
@@ -655,7 +655,6 @@ export class OrderActualFeed implements iFeed {
 			} else if (row.weight) {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			}
-			if (row.fetching_order_number === '20221222-0000020') console.log(row.ibpManageCode, ibp[row.ibpManageCode], waypointDeliveryFee)
 
 			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.itemStatus)) waypointDeliveryFee = '이슈'
 
@@ -664,7 +663,7 @@ export class OrderActualFeed implements iFeed {
 				deductedVat = Math.round(parseFloat(vatRefund[row.ibpManageCode] ?? '0') * currencyRate)
 			}
 
-			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && row.cardApprovalNumber !== '파스토') {
+			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && row.cardApprovalNumber !== '파스토' && !row.deliveryMethod.includes('직배송')) {
 				deductedVat = '이슈'
 			}
 
