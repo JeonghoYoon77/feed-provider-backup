@@ -55,7 +55,7 @@ export class NaverCPSFeed implements iFeed {
 			const chunkedUpdate = chunk(currentData.map(row => [row.id, row.ip_final_price]))
 			for (const update of chunkedUpdate) {
 				await MySQLWrite.execute(`
-					INSERT INTO naver_upload_item_actual (item_id, final_price)
+					INSERT IGNORE INTO naver_upload_item_actual (item_id, final_price)
 					VALUES ?;
 				`, [update])
 			}
