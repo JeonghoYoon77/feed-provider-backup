@@ -656,7 +656,10 @@ export class OrderActualFeed implements iFeed {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			}
 
-			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.itemStatus)) waypointDeliveryFee = '이슈'
+			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.itemStatus)) {
+				console.log(row.itemOrderNumber, row.ibpManageCode)
+				waypointDeliveryFee = '이슈'
+			}
 
 			let deductedVat: any = 0
 			if (row.ibpManageCode) {
@@ -771,7 +774,7 @@ export class OrderActualFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (['운송료'].includes(key) && rows[i]['운송료']) continue
+					if (['운송료'].includes(key) && rows[i]['운송료'] && rows[i]['운송료'] !== '이슈') continue
 					if (['수동 확인 필요'].includes(feed[i][key])) continue
 					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key]) && rows[i][key] === '' && (isNil(feed[i][key]) || feed[i][key] === '')) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
