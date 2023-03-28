@@ -25,6 +25,13 @@ export class NaverFeed implements iFeed {
 			buffer,
 		})
 
+		await S3Client.upload({
+			folderName: 'feeds',
+			fileName: 'naver-update-feed.txt',
+			buffer: Buffer.from(''),
+			contentType: 'text/plain',
+		})
+
 		console.log(`FEED_URL: ${feedUrl}`)
 	}
 
