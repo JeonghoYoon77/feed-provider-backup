@@ -16,7 +16,7 @@ export class NaverFeed implements iFeed {
 	static brandSemiNameMap: any
 	static categorySemiNameMap: any
 
-	private chunkedUpdate: any[]
+	private chunkedUpdate: any[] = []
 
 	async upload() {
 		const buffer = await this.getTsvBuffer()
@@ -64,15 +64,19 @@ export class NaverFeed implements iFeed {
 
 		const listRaw = await MySQL.execute('SELECT item_id FROM naver_upload_list nul')
 		const list = listRaw.map(row => row.item_id)
-		const data = await MySQL.execute(NaverFeed.query(list))
-		const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
-		const chunkedData = chunk(currentData, 100000)
+		const chunkedList = chunk(list, 100000)
 
-		this.chunkedUpdate = chunk(currentData.map(row => [row.id, row.ip_final_price]))
+		const tsvDataList = await Promise.all(chunkedList.map(async list => {
+			const data = await MySQL.execute(NaverFeed.query(list))
+			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
+			this.chunkedUpdate.push(currentData.map(row => [row.id, row.ip_final_price]))
+			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverFeed.makeRow))).filter(row => row)
+			return tsvData
+		}))
 
-		for (let i in chunkedData) {
-			const tsvData: TSVData[] = (await Promise.all(chunkedData[i].map(NaverFeed.makeRow))).filter(row => row)
-			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedData.length)
+		for (let i in tsvDataList) {
+			const tsvData: TSVData[] = tsvDataList[i]
+			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
 			fs.appendFileSync('./naver-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
 				header: i === '0',
