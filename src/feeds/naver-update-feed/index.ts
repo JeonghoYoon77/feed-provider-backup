@@ -54,13 +54,17 @@ export class NaverUpdateFeed implements iFeed {
         OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price AND (!ii.is_sellable AND !ii.is_show)))
 		`)
 		const list = listRaw.map(row => row.item_id)
-		const data = await MySQL.execute(NaverUpdateFeed.query(list))
-		const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
-		const chunkedData = chunk(currentData, 100000)
+		const chunkedList = chunk(list, 100000)
+		const tsvDataList = await Promise.all(chunkedList.map(async list => {
+			const data = await MySQL.execute(NaverUpdateFeed.query(list))
+			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
+			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverUpdateFeed.makeRow))).filter(row => row)
+			return tsvData
+		}))
 
-		for (let i in chunkedData) {
-			const tsvData: TSVData[] = (await Promise.all(chunkedData[i].map(NaverUpdateFeed.makeRow))).filter(row => row)
-			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedData.length)
+		for (let i in tsvDataList) {
+			const tsvData: TSVData[] = tsvDataList[i]
+			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
 			fs.appendFileSync('./naver-update-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
 				header: i === '0',
