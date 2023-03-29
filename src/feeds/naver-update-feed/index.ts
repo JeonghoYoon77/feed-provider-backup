@@ -54,13 +54,13 @@ export class NaverUpdateFeed implements iFeed {
         OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price AND (!ii.is_sellable AND !ii.is_show)))
 		`)
 		const list = listRaw.map(row => row.item_id)
-		const chunkedList = chunk(list, 100000)
+		const data = await MySQL.execute(NaverUpdateFeed.query(list))
+		const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
+		const chunkedData = chunk(currentData, 100000)
 
-		for (let i in chunkedList) {
-			const data = await MySQL.execute(NaverUpdateFeed.query(chunkedList[i]))
-			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3)
-			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverUpdateFeed.makeRow))).filter(row => row)
-			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
+		for (let i in chunkedData) {
+			const tsvData: TSVData[] = (await Promise.all(chunkedData[i].map(NaverUpdateFeed.makeRow))).filter(row => row)
+			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedData.length)
 			fs.appendFileSync('./naver-update-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
 				header: i === '0',
@@ -73,7 +73,7 @@ export class NaverUpdateFeed implements iFeed {
 
 	private static query(itemIds): string {
 		return format(`
-			SELECT ii.idx                                                              AS 'id',
+			SELECT STRAIGHT_JOIN ii.idx                                                              AS 'id',
 						 ii.shop_id                                                          AS shop_id,
 						 ii.item_code                                                        AS item_code,
 
@@ -82,7 +82,6 @@ export class NaverUpdateFeed implements iFeed {
 						 bi.brand_name,
 						 bi.brand_name_kor,
 						 ii.item_gender,
-						 fc.fetching_category_name,
 						 ii.item_name,
 						 ii.origin_name,
 						 ii.custom_color,
@@ -158,20 +157,10 @@ export class NaverUpdateFeed implements iFeed {
 						 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
 						 JOIN item_user_price iup on ii.idx = iup.item_id AND isp.price_rule = iup.price_rule
 						 JOIN item_origin_price iop on ii.idx = iop.item_id AND isp.price_rule = iop.price_rule
-						 JOIN fetching_category fc on (SELECT icm.fetching_category_id
-																					 FROM fetching_category fc
-																									JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-																					 WHERE icm.item_id = ii.idx
-																						 AND fc.fetching_category_name != '기타'
-																						 AND fc.fetching_category_depth != 0
-																					 ORDER BY fc.idx DESC
-																					 LIMIT 1) = fc.idx
 						 LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx
 						 LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
 						 LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
-			WHERE NOT (bi.brand_id = 17 AND (fc.idx IN (17, 21) OR fc.fetching_category_parent_id IN (17, 21)))
-				AND ii.idx IN (?)
-			ORDER BY ii.idx
+			WHERE ii.is_sellable AND ii.is_show AND ii.idx IN (?)
 		`, [itemIds])
 	}
 

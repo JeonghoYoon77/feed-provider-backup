@@ -16,6 +16,8 @@ export class NaverFeed implements iFeed {
 	static brandSemiNameMap: any
 	static categorySemiNameMap: any
 
+	private chunkedUpdate: any[]
+
 	async upload() {
 		const buffer = await this.getTsvBuffer()
 
@@ -32,7 +34,17 @@ export class NaverFeed implements iFeed {
 			contentType: 'text/plain',
 		})
 
-		console.log(`FEED_URL: ${feedUrl}`)
+		console.log('FEED_URL\t:', feedUrl)
+
+		await MySQLWrite.execute('DELETE FROM naver_upload_item_actual')
+		for (const i in this.chunkedUpdate) {
+			console.log('PROCESS\t:', parseInt(i) + 1, '/', this.chunkedUpdate.length)
+
+			await MySQLWrite.execute(`
+        INSERT IGNORE INTO naver_upload_item_actual (item_id, final_price)
+        VALUES ?;
+      `, [this.chunkedUpdate[i]])
+		}
 	}
 
 	async getTsvBuffer(delimiter = '\t'): Promise<Buffer> {
@@ -52,22 +64,15 @@ export class NaverFeed implements iFeed {
 
 		const listRaw = await MySQL.execute('SELECT item_id FROM naver_upload_list nul')
 		const list = listRaw.map(row => row.item_id)
-		const chunkedList = chunk(list, 100000)
+		const data = await MySQL.execute(NaverFeed.query(list))
+		const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
+		const chunkedData = chunk(currentData, 100000)
 
-		await MySQLWrite.execute('DELETE FROM naver_upload_item_actual')
+		this.chunkedUpdate = chunk(currentData.map(row => [row.id, row.ip_final_price]))
 
-		for (let i in chunkedList) {
-			const data = await MySQL.execute(NaverFeed.query(chunkedList[i]))
-			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3)
-			const chunkedUpdate = chunk(currentData.map(row => [row.id, row.ip_final_price]))
-			for (const update of chunkedUpdate) {
-				await MySQLWrite.execute(`
-					INSERT IGNORE INTO naver_upload_item_actual (item_id, final_price)
-					VALUES ?;
-				`, [update])
-			}
-			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverFeed.makeRow))).filter(row => row)
-			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
+		for (let i in chunkedData) {
+			const tsvData: TSVData[] = (await Promise.all(chunkedData[i].map(NaverFeed.makeRow))).filter(row => row)
+			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedData.length)
 			fs.appendFileSync('./naver-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
 				header: i === '0',
@@ -80,7 +85,7 @@ export class NaverFeed implements iFeed {
 
 	private static query(itemIds): string {
 		return format(`
-			SELECT ii.idx                                                              AS 'id',
+			SELECT STRAIGHT_JOIN ii.idx                                                              AS 'id',
 						 ii.shop_id                                                          AS shop_id,
 						 ii.item_code                                                        AS item_code,
 
@@ -89,7 +94,6 @@ export class NaverFeed implements iFeed {
 						 bi.brand_name,
 						 bi.brand_name_kor,
 						 ii.item_gender,
-						 fc.fetching_category_name,
 						 ii.item_name,
 						 ii.origin_name,
 						 ii.custom_color,
@@ -159,22 +163,12 @@ export class NaverFeed implements iFeed {
 						 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
 						 JOIN item_user_price iup on ii.idx = iup.item_id AND isp.price_rule = iup.price_rule
 						 JOIN item_origin_price iop on ii.idx = iop.item_id AND isp.price_rule = iop.price_rule
-						 JOIN fetching_category fc on (SELECT icm.fetching_category_id
-																					 FROM fetching_category fc
-																									JOIN item_category_map icm on fc.idx = icm.fetching_category_id
-																					 WHERE icm.item_id = ii.idx
-																						 AND fc.fetching_category_name != '기타'
-																						 AND fc.fetching_category_depth != 0
-																					 ORDER BY fc.idx DESC
-																					 LIMIT 1) = fc.idx
 						 LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx
 						 LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
 						 LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
 			WHERE ii.is_sellable = 1
 				AND ii.is_show = 1
-				AND NOT (bi.brand_id = 17 AND (fc.idx IN (17, 21) OR fc.fetching_category_parent_id IN (17, 21)))
 				AND ii.idx IN (?)
-			ORDER BY ii.idx
 		`, [itemIds])
 	}
 
