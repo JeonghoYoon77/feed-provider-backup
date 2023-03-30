@@ -51,7 +51,7 @@ export class NaverUpdateFeed implements iFeed {
 			    JOIN item_show_price isp ON ii.idx = isp.item_id
 			LEFT JOIN naver_upload_item_actual nuia on nul.item_id = nuia.item_id
 			WHERE (nuia.item_id IS NULL)
-        OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price AND (!ii.is_sellable AND !ii.is_show)))
+        OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price OR (!ii.is_sellable AND !ii.is_show)))
 		`)
 		const list = listRaw.map(row => row.item_id)
 		const chunkedList = chunk(list, 100000)
