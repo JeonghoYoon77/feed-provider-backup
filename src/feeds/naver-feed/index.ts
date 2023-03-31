@@ -205,7 +205,9 @@ export class NaverFeed implements iFeed {
 		const pcLink: string = tsvFormat.link({
 			address: constants.address(),
 		})
-		const mobileLink: string = pcLink
+		const mobileLink: string = tsvFormat.mobileLink({
+			address: constants.address(),
+		})
 		const searchTag: string = tsvFormat.searchTag({
 			brandName: row.brand_name, brandNameKor: row.brand_name_kor, categoryName2: row.category_name2, categoryName3: row.category_name3, color: tsvFormat.color(row.custom_color), designerStyleId: row.designer_style_id, originName: row.origin_name, itemName: row.item_name, brandSemiName: NaverFeed.brandSemiNameMap[row.brand_id], categorySemiName: NaverFeed.categorySemiNameMap[row.category_id3]
 		})
