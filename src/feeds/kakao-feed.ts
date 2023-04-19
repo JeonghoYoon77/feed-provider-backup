@@ -118,7 +118,7 @@ export class KakaoFeed implements iFeed {
 
 		await MySQLWrite.execute('DELETE FROM kakao_upload_item_actual')
 		await MySQLWrite.execute(`
-			INSERT INTO kakao_upload_item_actual (item_id, final_price)
+			INSERT IGNORE INTO kakao_upload_item_actual (item_id, final_price)
 			VALUES ?;
 		`, [insertData])
 
