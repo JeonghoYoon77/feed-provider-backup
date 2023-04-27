@@ -1,15 +1,16 @@
-import { parse } from 'json2csv'
-import { format } from 'mysql2'
-
-import { iFeed } from '../feed'
-import { MySQL } from '../../utils'
-import { S3Client } from '../../utils'
-import Constants from './constants'
-import TSVFormat from './tsv-format'
-import TSVData from './tsv-data'
 import * as fs from 'fs'
+import { parse } from 'json2csv'
 import {chunk} from 'lodash'
 import moment from 'moment'
+import { format } from 'mysql2'
+
+import { MySQL, S3Client } from '../../utils'
+
+import { iFeed } from '../feed'
+import Constants from '../naver-feed/constants'
+import TSVFormat from '../naver-feed/tsv-format'
+
+import TSVData from './tsv-data'
 
 const constants = new Constants()
 
