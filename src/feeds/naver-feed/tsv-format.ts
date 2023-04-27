@@ -9,7 +9,7 @@ class TSVFormat {
 
 
 	constructor({ itemGender, id, shopId, productNo }) {
-		this._gender = itemGender === 'W' ? '여성' : '남성'
+		this._gender = itemGender === 'W' ? '여성' : itemGender === 'M' ? '남성' : ''
 		this._id = id
 		this._shopId = shopId
 		this._productNo = productNo
