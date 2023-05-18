@@ -28,7 +28,7 @@ export class NaverFeed implements iFeed {
 		})
 
 		console.log('FEED_URL\t:', feedUrl)
-		/*await S3Client.upload({
+		await S3Client.upload({
 			folderName: 'feeds',
 			fileName: 'naver-update-feed.txt',
 			buffer: Buffer.from(''),
@@ -36,7 +36,7 @@ export class NaverFeed implements iFeed {
 		})
 
 
-		// await MySQLWrite.execute('DELETE FROM naver_upload_item_actual')
+		await MySQLWrite.execute('DELETE FROM naver_upload_item_actual')
 		for (const i in this.chunkedUpdate) {
 			console.log('PROCESS\t:', parseInt(i) + 1, '/', this.chunkedUpdate.length)
 
@@ -44,7 +44,7 @@ export class NaverFeed implements iFeed {
         INSERT IGNORE INTO naver_upload_item_actual (item_id, final_price)
         VALUES ?;
       `, [this.chunkedUpdate[i]])
-		}*/
+		}
 	}
 
 	async getTsvBuffer(delimiter = '\t'): Promise<Buffer> {
