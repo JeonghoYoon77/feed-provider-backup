@@ -94,6 +94,8 @@ export class NaverSalesFeed implements iFeed {
 				targetEnd, hit._source.item[0].id
 			])
 
+			if (!row) continue
+
 			if (!dataActual[`F${row.mall_id}`]) {
 				/* eslint-disable camelcase */
 				row.mall_id = `F${row.mall_id}`
