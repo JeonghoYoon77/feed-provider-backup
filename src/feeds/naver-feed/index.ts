@@ -19,12 +19,12 @@ export class NaverFeed implements iFeed {
 	private chunkedUpdate: any[] = []
 
 	async upload() {
-		const buffer = await this.getTsvBuffer()
+		const readStream = await this.getTsvBuffer()
 
 		const feedUrl = await S3Client.upload({
 			folderName: 'feeds',
 			fileName: 'naver-feed.tsv',
-			buffer,
+			readStream,
 		})
 
 		console.log('FEED_URL\t:', feedUrl)
@@ -47,11 +47,11 @@ export class NaverFeed implements iFeed {
 		}
 	}
 
-	async getTsvBuffer(delimiter = '\t'): Promise<Buffer> {
+	async getTsvBuffer(delimiter = '\t'): Promise<fs.ReadStream> {
 		return this.getTsv(delimiter)
 	}
 
-	async getTsv(delimiter = '\t'): Promise<Buffer> {
+	async getTsv(delimiter = '\t'): Promise<fs.ReadStream> {
 		try {
 			fs.unlinkSync('./naver-feed.tsv')
 		} catch {}
@@ -84,7 +84,7 @@ export class NaverFeed implements iFeed {
 				quote: '',
 			}))
 		}
-		return fs.readFileSync('./naver-feed.tsv')
+		return fs.createReadStream('./naver-feed.tsv')
 	}
 
 	private static query(itemIds): string {

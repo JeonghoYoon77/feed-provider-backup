@@ -1,30 +1,46 @@
 import { AWS } from '../config'
 import S3 from 'aws-sdk/clients/s3'
+import * as stream from 'stream'
 
 export class S3Client {
     static client
     static s3Url: string
 
-    static async upload({ folderName, fileName, buffer, contentType = 'text/tsv' }) {
+    static async upload({ folderName, fileName, buffer = null, readStream = null, contentType = 'text/tsv' }) {
     	const key = `${folderName}/${fileName}`
-    	const params = {
-    		ACL: 'public-read',
-    		Bucket: 'fetching-feeds',
-    		ContentType: contentType,
-    		Key: key,
-    		Body: buffer,
-    	}
 
     	const client = new S3({
-    		accessKeyId: AWS.ACCESS_KEY_ID,
-    		secretAccessKey: AWS.SECRET_ACCESS_KEY,
+    		credentials: {
+    			accessKeyId: AWS.ACCESS_KEY_ID,
+    			secretAccessKey: AWS.SECRET_ACCESS_KEY,
+    		}
     	})
-    	await new Promise((resolve, reject) => {
-    		client.putObject(params, (error, data) => {
-    			if (error) reject(error)
-    			resolve(data)
-    		})
-    	})
+    	if (buffer) {
+    		const params = {
+    			ACL: 'public-read',
+    			Bucket: 'fetching-feeds',
+    			ContentType: contentType,
+    			Key: key,
+    			Body: buffer,
+    		}
+    		await client.putObject(params).promise()
+    	} else if (readStream) {
+    		const pass = new stream.PassThrough()
+
+    		const params = {
+    			ACL: 'public-read',
+    			Bucket: 'fetching-feeds',
+    			ContentType: contentType,
+    			Key: key,
+    			Body: pass,
+    		}
+
+    		const promise = client.putObject(params)
+
+    		readStream.pipe(pass)
+
+    		await promise
+    	}
 
     	return `${this.s3Url}/${folderName}/${fileName}`
     }
