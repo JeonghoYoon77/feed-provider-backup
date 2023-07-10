@@ -1,6 +1,6 @@
+import { S3Client as S3 } from '@aws-sdk/client-s3'
 import { AWS } from '../config'
-import S3 from 'aws-sdk/clients/s3'
-import * as stream from 'stream'
+import {Upload} from '@aws-sdk/lib-storage'
 
 export class S3Client {
     static client
@@ -15,32 +15,20 @@ export class S3Client {
     			secretAccessKey: AWS.SECRET_ACCESS_KEY,
     		}
     	})
-    	if (buffer) {
-    		const params = {
-    			ACL: 'public-read',
-    			Bucket: 'fetching-feeds',
-    			ContentType: contentType,
-    			Key: key,
-    			Body: buffer,
-    		}
-    		await client.putObject(params).promise()
-    	} else if (readStream) {
-    		const pass = new stream.PassThrough()
-
-    		const params = {
-    			ACL: 'public-read',
-    			Bucket: 'fetching-feeds',
-    			ContentType: contentType,
-    			Key: key,
-    			Body: pass,
-    		}
-
-    		const promise = client.putObject(params)
-
-    		readStream.pipe(pass)
-
-    		await promise
+    	const params = {
+    		ACL: 'public-read',
+    		Bucket: 'fetching-feeds',
+    		ContentType: contentType,
+    		Key: key,
+    		Body: buffer || readStream,
     	}
+
+    	const parallelUploadS3 = new Upload({
+    		client,
+    		params
+    	})
+
+    	await parallelUploadS3.done()
 
     	return `${this.s3Url}/${folderName}/${fileName}`
     }

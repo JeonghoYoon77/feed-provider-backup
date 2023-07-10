@@ -17,6 +17,8 @@
   "author": "whitekiwi",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.367.0",
+    "@aws-sdk/lib-storage": "^3.367.0",
     "@elastic/elasticsearch": "^7.16.0",
     "@fetching-korea/common-utils": "^1.0.6",
     "aws-sdk": "^2.827.0",
