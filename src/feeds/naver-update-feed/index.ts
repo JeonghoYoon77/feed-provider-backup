@@ -91,6 +91,7 @@ export class NaverUpdateFeed implements iFeed {
 						 ii.origin_name,
 						 ii.custom_color,
 						 idsi.raw_id                                                         AS designer_style_id,
+						 idsi.raw_color_id                                                   AS designer_color_id,
 						 inpi.naver_product_id,
 
 						 si.shop_type,
@@ -193,7 +194,7 @@ export class NaverUpdateFeed implements iFeed {
 					: row.category_name3,
 			itemName: row.item_name,
 			customColor: row.custom_color,
-			mpn: row.designer_style_id,
+			mpn: [row.designer_style_id, row.designer_color_id].filter(str => str).join(' '),
 		})
 		const pcLink: string = tsvFormat.link({
 			address: constants.address(),
