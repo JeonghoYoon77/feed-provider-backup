@@ -169,19 +169,21 @@ export class NaverSalesFeed implements iFeed {
 				targetEnd, hit._source.item[0].id
 			])
 
-			if (dataActual[`F${row.mall_id}`]) continue
+			if (row) {
+				if (dataActual[`F${row.mall_id}`]) continue
 
-			if (!data[`F${row.mall_id}`]) {
-				/* eslint-disable camelcase */
-				row.mall_id = `F${row.mall_id}`
-				if (!row.sale_count) row.sale_count = 1
-				if (!row.order_count) row.order_count = 1
-				/* eslint-enable camelcase */
+				if (!data[`F${row.mall_id}`]) {
+					/* eslint-disable camelcase */
+					row.mall_id = `F${row.mall_id}`
+					if (!row.sale_count) row.sale_count = 1
+					if (!row.order_count) row.order_count = 1
+					/* eslint-enable camelcase */
 
-				data[row.mall_id] = row
-			} else if (data[`F${row.mall_id}`].sale_count * data[`F${row.mall_id}`].sale_price < 1000000) {
-				data[`F${row.mall_id}`].sale_count++
-				data[`F${row.mall_id}`].order_count++
+					data[row.mall_id] = row
+				} else if (data[`F${row.mall_id}`].sale_count * data[`F${row.mall_id}`].sale_price < 1000000) {
+					data[`F${row.mall_id}`].sale_count++
+					data[`F${row.mall_id}`].order_count++
+				}
 			}
 		}
 
