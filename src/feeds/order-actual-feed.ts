@@ -56,27 +56,40 @@ export class OrderActualFeed implements iFeed {
 
 		const ibpSheet = dataDoc.sheetsById['325601058'] // IBP 배송 비용
 		const eldexSheet = dataDoc.sheetsById['980121221'] // 엘덱스 배송 비용
+		const menetzSheet = dataDoc.sheetsById['543621734'] // 메네츠 배송 비용
+		const iporterSheet = dataDoc.sheetsById['862003963'] // 아이포터 배송 비용
+		const menetzBuySheet = dataDoc.sheetsById['574865687'] // 메네츠 구매 비용
 		const lotteCardSheet = dataDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
 		const lotteCardExtraSheet = dataDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
 		const samsungCardSheet = dataDoc.sheetsById['880709363'] // 삼성카드 매출내역
-		const taxSheet = dataDoc.sheetsById['159377898']
+		const taxSheet = dataDoc.sheetsById['159377898'] // 관부가세 납부
+		const taxRefundSheet = dataDoc.sheetsById['492373826'] // 관부가세 환급(유니패스)
 
 		const eldexRaw = await eldexSheet.getRows()
 		const ibpRaw = await ibpSheet.getRows()
+		const menetzRaw = await menetzSheet.getRows()
+		const iporterRaw = await iporterSheet.getRows()
+		const menetzBuyRaw = await menetzBuySheet.getRows()
 		const lotteCardRaw = await lotteCardSheet.getRows()
 		const lotteCardExtraRaw = await lotteCardExtraSheet.getRows()
 		const samsungCardRaw = await samsungCardSheet.getRows()
 		const taxRaw = await taxSheet.getRows()
+		const taxRefundRaw = await taxRefundSheet.getRows()
 
 		const eldex = {}
 		const ibp = {}
+		const menetz = {}
+		const iporter = {}
 		const ibpFee = {}
+		const menetzBuy = {}
+		const menetzFee = {}
 		const lotteCard = {}
 		const lotteCardExtra = {}
 		const lotteCardRefund = {}
 		const samsungCard = {}
 		const samsungCardRefund = {}
 		const tax = {}
+		const taxRefund = {}
 		const vatRefund = {}
 
 		eldexRaw.forEach((row) => {
@@ -96,11 +109,43 @@ export class OrderActualFeed implements iFeed {
 			}
 		})
 
+		menetzRaw.forEach((row) => {
+			const id = row['Shipping No.']
+			const value = row['Delivery Fee']
+			const fee = row['Additional Fee']
+			if (menetz[id]) menetz[id] += parseFloat(value) + parseFloat(fee)
+			else menetz[id] = parseFloat(value) + parseFloat(fee)
+		})
+
+		menetzBuyRaw.forEach((row) => {
+			const id = row['운송장번호']
+			const value = row['구매액']
+			const fee = row['수수료']
+			if (menetzBuy[id]) menetzBuy[id] += parseFloat(value)
+			else menetzBuy[id] = parseFloat(value)
+			if (menetzFee[id]) menetzFee[id] += parseFloat(fee)
+			else menetzFee[id] = parseFloat(fee)
+		})
+
+		iporterRaw.forEach((row) => {
+			const id = row['운송장번호']
+			const value = row['전체배송비']
+			iporter[id] = parseFloat(value)
+		})
+
 		taxRaw.forEach((row) => {
 			if (row['운송장번호']) {
 				const id = row['운송장번호'].trim()
 				const value = row['고지 금액'].replace(/,/g, '')
 				tax[id] = parseInt(value)
+			}
+		})
+
+		taxRefundRaw.forEach((row) => {
+			if (row['주문번호'] && row['처리 상태'] === '결과통보') {
+				const id = row['주문번호'].trim()
+				const value = row['환급 총액'].replace(/\D/g, '')
+				taxRefund[id] = parseInt(value)
 			}
 		})
 
@@ -415,6 +460,7 @@ export class OrderActualFeed implements iFeed {
                  weight                                                       AS weight,
                  imc.idx                                                      AS ibpManageCode,
                  CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
+                 dm.idx                                                       AS deliveryMethodId,
                  (SELECT u.name
                   FROM commerce.fetching_order_memo fom
                            JOIN fetching_dev.users u ON fom.admin_id = u.idx
@@ -640,6 +686,8 @@ export class OrderActualFeed implements iFeed {
 				taxTotal = '이슈'
 			}
 
+			let taxRefundTotal = taxRefund[row.itemOrderNumber] ?? 0
+
 			let fasstoPurchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0) - itemPriceData['DEDUCTED_VAT'] + itemPriceData['WAYPOINT_FEE']
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (row.isDDP ? itemPriceDataCanceled['DUTY_AND_TAX'] : 0)
 
@@ -648,16 +696,23 @@ export class OrderActualFeed implements iFeed {
 				if (row.isRefunded) cardRefundValue = -fasstoPurchaseValue
 			}
 
+			if (row.cardApprovalNumber === '메네츠' && menetzBuy[row.invoice]) {
+				cardPurchaseValue = Math.round(menetzBuy[row.invoice] * currencyRate)
+			}
+
 			let waypointDeliveryFee: any = parseInt(eldex[row.invoice?.trim()] ?? '0')
 
 			if (row.ibpManageCode) {
 				waypointDeliveryFee = Math.round((ibp[row.ibpManageCode] ?? 0) * currencyRate)
 			} else if (row.weight) {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
+			} else if ([10, 11].includes(row.deliveryMethodId) && menetz[row.invoice]) {
+				waypointDeliveryFee = Math.round(menetz[row.invoice] * currencyRate)
+			} else if ([14].includes(row.deliveryMethodId) && iporter[row.invoice]) {
+				waypointDeliveryFee = Math.round(iporter[row.invoice] * currencyRate)
 			}
 
 			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.itemStatus)) {
-				console.log(row.itemOrderNumber, row.ibpManageCode)
 				waypointDeliveryFee = '이슈'
 			}
 
@@ -666,7 +721,7 @@ export class OrderActualFeed implements iFeed {
 				deductedVat = Math.round(parseFloat(vatRefund[row.ibpManageCode] ?? '0') * currencyRate)
 			}
 
-			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && row.cardApprovalNumber !== '파스토' && !row.deliveryMethod.includes('직배송')) {
+			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && !['파스토', '메네츠'].includes(row.cardApprovalNumber) && !row.deliveryMethod.includes('직배송')) {
 				deductedVat = '이슈'
 			}
 
@@ -674,6 +729,10 @@ export class OrderActualFeed implements iFeed {
 
 			if (row.ibpManageCode) {
 				waypointFee = Math.round(parseFloat(ibpFee[row.ibpManageCode] ?? '0') * currencyRate)
+			}
+
+			if ([10, 11].includes(row.deliveryMethodId)) {
+				waypointFee = Math.round((menetzFee[row.invoice] ?? 0) * currencyRate)
 			}
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
@@ -747,7 +806,7 @@ export class OrderActualFeed implements iFeed {
 				'실 결제 금액': row.payAmount,
 				'차액 결제 금액': row.additionalPayAmount,
 				'결제 환불 금액': refundAmount,
-				'관부가세 환급': refundAmount && cardPurchaseValue ? taxTotal : 0,
+				'관부가세 환급': taxRefundTotal,
 				'페칭 수수료 취소': canceledFetchingFee,
 				'부가세 환급 취소': canceledDeductedVat,
 				'부가세 환급 수수료 취소': canceledWaypointFee,
@@ -812,7 +871,7 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 1월.csv',
@@ -835,6 +894,62 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-03-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
 					'1905523567'
+				),
+				contentType: 'text/csv',
+			})
+		)*/
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 3월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-03-01T00:00:00.000Z'),
+					new Date('2023-04-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'483712187'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 4월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-04-01T00:00:00.000Z'),
+					new Date('2023-05-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1623898028'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 5월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-05-01T00:00:00.000Z'),
+					new Date('2023-06-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'19761153'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 6월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-06-01T00:00:00.000Z'),
+					new Date('2023-07-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'26155364'
 				),
 				contentType: 'text/csv',
 			})
