@@ -13,6 +13,7 @@ import {
 	OrderPredictionFeed,
 	CroketFeed,
 	NaverUpdateFeed,
+	ZaiFeed,
 } from './feeds'
 import {CoochaFeed} from './feeds/coocha-feed'
 
@@ -61,6 +62,10 @@ async function main() {
 		'CROKET-FEED': async () => {
 			const croketFeed = new CroketFeed()
 			await croketFeed.upload()
+		},
+		'ZAI-FEED': async () => {
+			const zaiFeed = new ZaiFeed()
+			await zaiFeed.upload()
 		},
 		'ORDER-FEED': async () => {
 			const orderFeed = new OrderFeed()
