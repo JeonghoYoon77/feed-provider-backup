@@ -59,6 +59,7 @@ export class OrderActualFeed implements iFeed {
 		const menetzSheet = dataDoc.sheetsById['543621734'] // 메네츠 배송 비용
 		const iporterSheet = dataDoc.sheetsById['862003963'] // 아이포터 배송 비용
 		const menetzBuySheet = dataDoc.sheetsById['574865687'] // 메네츠 구매 비용
+		const menetzOrderNumberSheet = dataDoc.sheetsById['98520766'] // 메네츠 주문번호
 		const lotteCardSheet = dataDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
 		const lotteCardExtraSheet = dataDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
 		const samsungCardSheet = dataDoc.sheetsById['880709363'] // 삼성카드 매출내역
@@ -70,6 +71,7 @@ export class OrderActualFeed implements iFeed {
 		const menetzRaw = await menetzSheet.getRows()
 		const iporterRaw = await iporterSheet.getRows()
 		const menetzBuyRaw = await menetzBuySheet.getRows()
+		const menetzOrderNumberRaw = await menetzOrderNumberSheet.getRows()
 		const lotteCardRaw = await lotteCardSheet.getRows()
 		const lotteCardExtraRaw = await lotteCardExtraSheet.getRows()
 		const samsungCardRaw = await samsungCardSheet.getRows()
@@ -82,7 +84,10 @@ export class OrderActualFeed implements iFeed {
 		const iporter = {}
 		const ibpFee = {}
 		const menetzBuy = {}
+		const menetzRefund = {}
+		const menetzReturnFee = {}
 		const menetzFee = {}
+		const menetzOrderNumberMap = {}
 		const lotteCard = {}
 		const lotteCardExtra = {}
 		const lotteCardRefund = {}
@@ -93,7 +98,7 @@ export class OrderActualFeed implements iFeed {
 		const vatRefund = {}
 
 		eldexRaw.forEach((row) => {
-			const id = row['국내 택배 송장번호'] || row['송장번호']
+			const id = row['국내 택배 송장번호']?.trim() || row['송장번호']?.trim()
 			const value = row['2차결제금액(원)'].replace(/,/g, '')
 			const pgFee = row['PG수수료(원)'].replace(/,/g, '')
 			eldex[id] = parseInt(value) + parseInt(pgFee)
@@ -109,8 +114,12 @@ export class OrderActualFeed implements iFeed {
 			}
 		})
 
+		menetzOrderNumberRaw.forEach(row => {
+			menetzOrderNumberMap[row['업체주문번호']] = row['주문번호']
+		})
+
 		menetzRaw.forEach((row) => {
-			const id = row['Shipping No.']
+			const id = row['업체주문번호']
 			const value = row['Delivery Fee']
 			const fee = row['Additional Fee']
 			if (menetz[id]) menetz[id] += parseFloat(value) + parseFloat(fee)
@@ -118,13 +127,20 @@ export class OrderActualFeed implements iFeed {
 		})
 
 		menetzBuyRaw.forEach((row) => {
-			const id = row['운송장번호']
-			const value = row['구매액']
-			const fee = row['수수료']
-			if (menetzBuy[id]) menetzBuy[id] += parseFloat(value)
-			else menetzBuy[id] = parseFloat(value)
-			if (menetzFee[id]) menetzFee[id] += parseFloat(fee)
-			else menetzFee[id] = parseFloat(fee)
+			const id = row['주문번호']
+			const value = row['구매액'].replace(/,/g, '')
+			const fee = row['수수료'].replace(/,/g, '')
+			const total = parseFloat(row['적립/차감'].replace(/,/g, ''))
+			if (total < 0) {
+				menetzBuy[id] = parseFloat(value)
+				menetzFee[id] = parseFloat(fee)
+			} else {
+				if (id) {
+					if (row['특이사항'].includes('구매비 반품 처리')) menetzRefund[id] = total
+					if (row['특이사항'].includes('반품리턴 비용')) menetzReturnFee[id] = total
+					if (row['특이사항'].includes('구매대행 취소 처리')) menetzRefund[id] = total
+				}
+			}
 		})
 
 		iporterRaw.forEach((row) => {
@@ -615,6 +631,7 @@ export class OrderActualFeed implements iFeed {
 
 				return refund + acc
 			}, 0)
+
 			if ((row.isCanceled || row.isReturned) && cardApprovalNumberList.length && !cardRefundValue) cardRefundValue = '이슈'
 
 			const itemPriceData: any = {}
@@ -696,8 +713,20 @@ export class OrderActualFeed implements iFeed {
 				if (row.isRefunded) cardRefundValue = -fasstoPurchaseValue
 			}
 
-			if (row.cardApprovalNumber === '메네츠' && menetzBuy[row.invoice]) {
-				cardPurchaseValue = Math.round(menetzBuy[row.invoice] * currencyRate)
+			const menetzId = menetzOrderNumberMap[row.itemOrderNumber]
+
+			if (row.cardApprovalNumber === '메네츠' && menetzBuy[menetzId]) {
+				cardPurchaseValue = Math.round(menetzBuy[menetzId] * currencyRate)
+			}
+
+			if (row.cardApprovalNumber === '메네츠' && menetzRefund[menetzId]) {
+				cardRefundValue = -Math.round(menetzRefund[menetzId] * currencyRate)
+			}
+
+			if (row.cardApprovalNumber === '메네츠' && menetzReturnFee[menetzId]) {
+				let value = Math.round(menetzReturnFee[menetzId] * currencyRate)
+				if (value < 0) value = -value
+				row.overseasExtraCharge += value
 			}
 
 			let waypointDeliveryFee: any = parseInt(eldex[row.invoice?.trim()] ?? '0')
@@ -897,7 +926,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 
 		console.log(
 			await S3Client.upload({
@@ -911,7 +940,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
 		console.log(
 			await S3Client.upload({

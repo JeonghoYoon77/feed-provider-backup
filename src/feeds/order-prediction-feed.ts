@@ -401,8 +401,9 @@ export class OrderPredictionFeed implements iFeed {
 			row.itemPayAmountDetail.map((detail) => {
 				const currentItemPriceData: any = {}
 				let count = 0
-				Object.entries<any>(JSON.parse(detail.payAmount)).forEach(([key, data]) => {
-					if (key !== detail.country && (detail.country === 'KR' ? count !== 0 : true)) return
+				const payAmountDetailData = Object.entries<any>(JSON.parse(detail.payAmount))
+				payAmountDetailData.forEach(([key, data]) => {
+					if (key !== detail.country && (detail.country === 'KR' ? count !== 0 : true) && (key === 'KR' && payAmountDetailData.length === 1 ? count !== 0 : true)) return
 					count++
 					data.forEach((_row) => {
 						if (!localStatus.includes(row.status) && _row.type === 'DUTY_AND_TAX') {
@@ -476,6 +477,8 @@ export class OrderPredictionFeed implements iFeed {
 			if ((row.isCanceled && beforeShippingStatus.includes(row.status)) || row.isReturned) {
 				canceledAdditionalFee = itemPriceData['ADDITIONAL_FEE']
 			}
+
+			if (row.fetching_order_number === '20230331-0000027') console.log(itemPriceData)
 
 			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0)
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (itemPriceDataCanceled['DUTY_AND_TAX']) + (itemPriceDataCanceled['WAYPOINT_FEE'] ?? 0) + (itemPriceDataCanceled['ADDITIONAL_FEE'] || 0) + itemPriceDataCanceled['FETCHING_FEE']
@@ -584,7 +587,12 @@ export class OrderPredictionFeed implements iFeed {
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
-					cell.value = feed[i][key]
+					try {
+						cell.value = feed[i][key]
+					} catch (e) {
+						console.log(key, feed[i])
+						throw e
+					}
 					hasModified = true
 				}
 			} else {
@@ -608,7 +616,7 @@ export class OrderPredictionFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년_1월_추정.csv',
@@ -634,7 +642,7 @@ export class OrderPredictionFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
 		console.log(
 			await S3Client.upload({
