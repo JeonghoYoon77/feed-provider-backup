@@ -543,10 +543,14 @@ export class OrderActualFeed implements iFeed {
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
 			row.additionalPayAmount = 0
 
+			if (row.fetching_order_number === '20230603-0000025') console.log([...row.refundData ?? [], ...row.additionalRefundData ?? []])
+
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
-					return data?.ResultCode === '2001'
+					return data?.ResultCode === '2001' || data?.isDeposit
 				})
+
+			if (row.fetching_order_number === '20230603-0000025') console.log(refundData)
 
 			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
 			if (!(row.isCanceled || row.isReturned)) refundAmount = 0
