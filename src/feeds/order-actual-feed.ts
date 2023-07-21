@@ -90,6 +90,7 @@ export class OrderActualFeed implements iFeed {
 		const menetzOrderNumberMap = {}
 		const lotteCard = {}
 		const lotteCardExtra = {}
+		const lotteCardExtraType = {}
 		const lotteCardRefund = {}
 		const samsungCard = {}
 		const samsungCardRefund = {}
@@ -172,7 +173,7 @@ export class OrderActualFeed implements iFeed {
 			const value = parseInt(row['승인금액'].replace(/,/g, ''))
 			const isCanceled = row['매출취소 여부'] === 'Y'
 
-			lotteCardRefund[id] = 0
+			if (lotteCardRefund[id] === undefined) lotteCardRefund[id] = 0
 
 			if (value < 0 && isCanceled) {
 				lotteCardRefund[id] = value
@@ -187,10 +188,13 @@ export class OrderActualFeed implements iFeed {
 			const value = parseInt(row['승인금액'].replace(/,/g, ''))
 			const isCanceled = ['전액승인취소'].includes(row['승인구분'])
 
+			if (row['승인구분']) lotteCardExtraType[id] = row['승인구분']
+
 			if (lotteCardRefund[id] === undefined) lotteCardRefund[id] = 0
 
 			if (isCanceled) {
-				lotteCardRefund[id] = -lotteCard[id]
+				lotteCardRefund[id] = -(lotteCard[id] ?? value)
+				lotteCardExtra[id] = value
 			} else {
 				lotteCardExtra[id] = value
 			}
@@ -552,6 +556,8 @@ export class OrderActualFeed implements iFeed {
 		`)
 
 		const feed = data.map((row) => {
+			let memo = ''
+
 			// row.itemOrderNumber = row.itemOrderNumber.map(itemOrder => [itemOrder.itemOrderNumber, itemOrder.orderedAt ? `(${DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss')})` : ''].join(' ').trim()).join(', ')
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
 			row.additionalPayAmount = 0
@@ -629,7 +635,7 @@ export class OrderActualFeed implements iFeed {
 			}, 0)
 
 			const cardApprovalNumberList =
-				row.cardApprovalNumber?.split(',') ?? []
+				row.cardApprovalNumber?.split(',')?.filter(str => str) ?? []
 
 			let cardPurchaseValue = cardApprovalNumberList.reduce((acc, e) => {
 				const cardApprovalNumber = e.trim()
@@ -646,6 +652,8 @@ export class OrderActualFeed implements iFeed {
 				const cardApprovalNumber = e.trim()
 
 				const refund = row.cardCompanyName === '삼성카드' ? samsungCardRefund[cardApprovalNumber] || 0 : lotteCardRefund[cardApprovalNumber] || 0
+
+				if (lotteCardExtraType[cardApprovalNumber]) memo = `승인 구분 - ${lotteCardExtraType[cardApprovalNumber]}`
 
 				return refund + acc
 			}, 0)
@@ -870,7 +878,8 @@ export class OrderActualFeed implements iFeed {
 				'수선 비용': row.repairExtraCharge,
 				'매입 환출 금액': isNaN(-cardRefundValue) ? cardRefundValue : -cardRefundValue,
 				'반품 수수료': row.returnFee,
-				'제휴 수수료': row.affiliateFee
+				'제휴 수수료': row.affiliateFee,
+				'메모': memo,
 			}
 
 			return data
