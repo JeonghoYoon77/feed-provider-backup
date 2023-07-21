@@ -131,9 +131,10 @@ export class OrderActualFeed implements iFeed {
 			const value = row['구매액'].replace(/,/g, '')
 			const fee = row['수수료'].replace(/,/g, '')
 			const total = parseFloat(row['적립/차감'].replace(/,/g, ''))
-			if (total < 0) {
-				menetzBuy[id] = parseFloat(value)
-				menetzFee[id] = parseFloat(fee)
+
+			if (total < 0 && value && fee) {
+				menetzBuy[id] = parseFloat(value) || 0
+				menetzFee[id] = parseFloat(fee) || 0
 			} else {
 				if (id) {
 					if (row['특이사항'].includes('구매비 반품 처리')) menetzRefund[id] = total
@@ -555,12 +556,14 @@ export class OrderActualFeed implements iFeed {
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
 			row.additionalPayAmount = 0
 
-			const payData = (row.payData ?? []).map(data => JSON.parse(data))
+			const payData = (row.payData ?? []).map(data => JSON.parse(data)).filter(data => {
+				return ['NP00', 'KP00', '3001'].includes(data?.ResultCode) || data?.isDeposit
+			})
 			let payAmount = payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0)
 
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
-					return ['NP00', 'KP00', '3001'].includes(data?.ResultCode) || data?.isDeposit
+					return data?.ResultCode === '2001' || data?.isDeposit
 				})
 
 			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
@@ -895,7 +898,7 @@ export class OrderActualFeed implements iFeed {
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
-					console.log(feed[i]['상품별 주문번호'], key, feed[i][key])
+					// console.log(feed[i]['상품별 주문번호'], key, feed[i][key])
 					cell.value = feed[i][key]
 					hasModified = true
 				}
