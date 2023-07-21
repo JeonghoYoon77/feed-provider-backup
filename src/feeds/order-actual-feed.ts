@@ -267,6 +267,10 @@ export class OrderActualFeed implements iFeed {
                   WHERE fo2.fetching_order_number = fo.fetching_order_number
                     AND io.deleted_at IS NULL)                                AS fullTotalOriginAmount,
                  fo.pay_amount                                                AS payAmount,
+                 (SELECT JSON_ARRAYAGG(opl.data)
+                  FROM commerce.order_pay_log opl
+                           JOIN commerce.order_pay_log_item_map oplim ON opl.idx = oplim.log_id
+                  WHERE oplim.item_order_number = io.item_order_number) AS payData,
                  (SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
                   FROM commerce.order_additional_pay oap
                            JOIN commerce.order_additional_pay_item oapi
@@ -275,6 +279,14 @@ export class OrderActualFeed implements iFeed {
                   JOIN commerce.order_additional_pay_log oapl ON oapi.additional_item_number = oapl.additional_item_number
                   JOIN commerce.order_additional_pay_log_item_map oaplim ON oapl.idx = oaplim.log_id
                   WHERE oaplim.item_order_number = io.item_order_number) AS additionalPayInfo,
+                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'data', oapl.data))
+                  FROM commerce.order_additional_pay oap
+                           JOIN commerce.order_additional_pay_item oapi
+                                ON oapi.order_additional_number = oap.order_additional_number AND
+                                   oapi.status = 'PAID'
+                           JOIN commerce.order_additional_pay_log oapl ON oapi.additional_item_number = oapl.additional_item_number
+                           JOIN commerce.order_additional_pay_log_item_map oaplim ON oapl.idx = oaplim.log_id
+                  WHERE oaplim.item_order_number = io.item_order_number) AS additionalPayData,
                  fo.status,
                  fo.order_path,
                  fo.pay_method,
@@ -543,14 +555,13 @@ export class OrderActualFeed implements iFeed {
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
 			row.additionalPayAmount = 0
 
-			if (row.fetching_order_number === '20230603-0000025') console.log([...row.refundData ?? [], ...row.additionalRefundData ?? []])
+			const payData = (row.payData ?? []).map(data => JSON.parse(data))
+			let payAmount = payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0)
 
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
-					return data?.ResultCode === '2001' || data?.isDeposit
+					return ['NP00', 'KP00', '3001'].includes(data?.ResultCode) || data?.isDeposit
 				})
-
-			if (row.fetching_order_number === '20230603-0000025') console.log(refundData)
 
 			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
 			if (!(row.isCanceled || row.isReturned)) refundAmount = 0
@@ -579,15 +590,15 @@ export class OrderActualFeed implements iFeed {
 			let pgFee = 0
 
 			if (row.pay_method === 'CARD') {
-				pgFee = Math.round(row.payAmount * 0.014)
+				pgFee = Math.round(payAmount * 0.014)
 			} else if (row.pay_method === 'KAKAO') {
-				pgFee = Math.round(row.payAmount * 0.015)
+				pgFee = Math.round(payAmount * 0.015)
 			} else if (row.pay_method === 'NAVER') {
-				pgFee = Math.round(row.payAmount * 0.015)
+				pgFee = Math.round(payAmount * 0.015)
 			} else if (row.pay_method === 'ESCROW') {
-				pgFee = Math.round(row.payAmount * 0.017)
+				pgFee = Math.round(payAmount * 0.017)
 			} else if (row.pay_method === 'ESCROW_CARD') {
-				pgFee = Math.round(row.payAmount * 0.016)
+				pgFee = Math.round(payAmount * 0.016)
 			}
 
 			if (row.additionalPayInfo) {
@@ -723,7 +734,7 @@ export class OrderActualFeed implements iFeed {
 				cardPurchaseValue = Math.round(menetzBuy[menetzId] * currencyRate)
 			}
 
-			if (row.cardApprovalNumber === '메네츠' && menetzRefund[menetzId]) {
+			if (row.cardApprovalNumber === '메네츠' && menetzRefund[menetzId] === menetzBuy[menetzId] + menetzFee[menetzId]) {
 				cardRefundValue = -Math.round(menetzRefund[menetzId] * currencyRate)
 			}
 
@@ -765,7 +776,7 @@ export class OrderActualFeed implements iFeed {
 			}
 
 			if ([10, 11].includes(row.deliveryMethodId)) {
-				waypointFee = Math.round((menetzFee[row.invoice] ?? 0) * currencyRate)
+				waypointFee = Math.round((menetzFee[menetzId] ?? 0) * currencyRate)
 			}
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
@@ -773,6 +784,10 @@ export class OrderActualFeed implements iFeed {
 			if ((row.isCanceled && !localStatus.includes(row.itemStatus)) || row.isReturned) {
 				canceledDeductedVat = deductedVat
 				canceledWaypointFee = waypointFee
+			}
+
+			if (row.cardApprovalNumber === '메네츠' && menetzRefund[menetzId] === menetzBuy[menetzId] + menetzFee[menetzId]) {
+				canceledWaypointFee = menetzFee[menetzId]
 			}
 
 			let coupon = 0, point = 0
@@ -836,7 +851,7 @@ export class OrderActualFeed implements iFeed {
 				'적립금': point,
 				'PG수수료': pgFee - refundPgFee,
 				'부가세 환급 수수료': waypointFee,
-				'실 결제 금액': row.payAmount,
+				'실 결제 금액': payAmount,
 				'차액 결제 금액': row.additionalPayAmount,
 				'결제 환불 금액': refundAmount,
 				'관부가세 환급': taxRefundTotal,
@@ -880,6 +895,7 @@ export class OrderActualFeed implements iFeed {
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
+					console.log(feed[i]['상품별 주문번호'], key, feed[i][key])
 					cell.value = feed[i][key]
 					hasModified = true
 				}
@@ -944,7 +960,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 
 		console.log(
 			await S3Client.upload({
@@ -972,7 +988,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
 		console.log(
 			await S3Client.upload({
