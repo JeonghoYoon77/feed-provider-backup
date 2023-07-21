@@ -573,6 +573,8 @@ export class OrderActualFeed implements iFeed {
 					return data?.ResultCode === '2001' || data?.isDeposit
 				})
 
+			if (row.itemOrderNumber === '') console.log(refundData)
+
 			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
 			if (!(row.isCanceled || row.isReturned)) refundAmount = 0
 			// const salesAmount = row.payAmount - refundAmount
@@ -762,8 +764,8 @@ export class OrderActualFeed implements iFeed {
 				waypointDeliveryFee = Math.round((ibp[row.ibpManageCode] ?? 0) * currencyRate)
 			} else if (row.weight) {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
-			} else if ([10, 11].includes(row.deliveryMethodId) && menetz[row.invoice]) {
-				waypointDeliveryFee = Math.round(menetz[row.invoice] * currencyRate)
+			} else if ([10, 11].includes(row.deliveryMethodId) && menetz[menetzId]) {
+				waypointDeliveryFee = Math.round(menetz[menetzId] * currencyRate)
 			} else if ([14].includes(row.deliveryMethodId) && iporter[row.invoice]) {
 				waypointDeliveryFee = Math.round(iporter[row.invoice] * currencyRate)
 			}
@@ -777,7 +779,6 @@ export class OrderActualFeed implements iFeed {
 				deductedVat = Math.round(parseFloat(vatRefund[row.ibpManageCode] ?? '0') * currencyRate)
 			}
 
-			if (row.itemOrderNumber === 'P-20230607-0000066') console.log(row.itemOrderNumber, row.isVatDeductionAppliedOnCheckout)
 			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && !['파스토', '메네츠'].includes(row.cardApprovalNumber) && !row.deliveryMethod.includes('직배송') && !row.isVatDeductionAppliedOnCheckout) {
 				deductedVat = '이슈'
 			}
