@@ -491,6 +491,7 @@ export class OrderActualFeed implements iFeed {
                  iot.tax_paid                                                 AS isTaxPaid,
                  so.is_ddp_service                                            AS isDDP,
                  weight                                                       AS weight,
+                 sp.is_vat_deduction_applied_on_checkout                      AS isVatDeductionAppliedOnCheckout,
                  imc.idx                                                      AS ibpManageCode,
                  CONCAT(dm.name, ' ', dm.country)                             AS deliveryMethod,
                  dm.idx                                                       AS deliveryMethodId,
@@ -776,7 +777,8 @@ export class OrderActualFeed implements iFeed {
 				deductedVat = Math.round(parseFloat(vatRefund[row.ibpManageCode] ?? '0') * currencyRate)
 			}
 
-			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && !['파스토', '메네츠'].includes(row.cardApprovalNumber) && !row.deliveryMethod.includes('직배송')) {
+			if (row.itemOrderNumber === 'P-20230607-0000066') console.log(row.itemOrderNumber, row.isVatDeductionAppliedOnCheckout)
+			if (itemPriceData['DEDUCTED_VAT'] && !deductedVat && localStatus.includes(row.itemStatus) && !['파스토', '메네츠'].includes(row.cardApprovalNumber) && !row.deliveryMethod.includes('직배송') && !row.isVatDeductionAppliedOnCheckout) {
 				deductedVat = '이슈'
 			}
 
