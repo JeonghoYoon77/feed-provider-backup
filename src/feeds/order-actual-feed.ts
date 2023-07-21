@@ -120,7 +120,7 @@ export class OrderActualFeed implements iFeed {
 		})
 
 		menetzRaw.forEach((row) => {
-			const id = row['업체주문번호']
+			const id = row['Shipping No.']
 			const value = row['Delivery Fee']
 			const fee = row['Additional Fee']
 			if (menetz[id]) menetz[id] += parseFloat(value) + parseFloat(fee)
@@ -272,6 +272,17 @@ export class OrderActualFeed implements iFeed {
                   WHERE fo2.fetching_order_number = fo.fetching_order_number
                     AND io.deleted_at IS NULL)                                AS fullTotalOriginAmount,
                  fo.pay_amount                                                AS payAmount,
+                 io.pay_amount                                                AS itemPayAmount,
+                 (SELECT JSON_OBJECT('sum', SUM(io2.pay_amount), 'count', COUNT(io2.item_order_number))
+                  FROM commerce.item_order io2
+                      JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
+                  WHERE so2.fetching_order_number = fo.fetching_order_number) AS itemOrderInfo,
+                 (SELECT JSON_OBJECT('sum', SUM(io2.pay_amount), 'count', COUNT(io2.item_order_number))
+                  FROM commerce.item_order io2
+                           JOIN commerce.shop_order so2 ON io2.shop_order_number = so2.shop_order_number
+                  LEFT JOIN commerce.order_refund_item orefi2 ON io2.item_order_number = orefi2.item_order_number AND orefi2.status = 'ACCEPT'
+                  WHERE so2.fetching_order_number = fo.fetching_order_number
+                    AND orefi2.item_order_number IS NULL)                     AS itemOrderInfoWithoutCancel,
                  (SELECT JSON_ARRAYAGG(opl.data)
                   FROM commerce.order_pay_log opl
                            JOIN commerce.order_pay_log_item_map oplim ON opl.idx = oplim.log_id
@@ -559,6 +570,12 @@ export class OrderActualFeed implements iFeed {
 		const feed = data.map((row) => {
 			let memo = ''
 
+			const amountRate = row.itemPayAmount / (row.itemOrderInfo.sum ?? 0)
+			let amountRateCanceled = (((row.isCanceled || row.isReturned) ? 0 : row.itemPayAmount) / (row.itemOrderInfoWithoutCancel.sum ?? 0)) || 0
+			if (row.itemOrderInfoWithoutCancel.count === 0) {
+				amountRateCanceled = amountRate
+			}
+
 			// row.itemOrderNumber = row.itemOrderNumber.map(itemOrder => [itemOrder.itemOrderNumber, itemOrder.orderedAt ? `(${DateTime.fromISO(row.created_at.toISOString()).setZone('Asia/Seoul').toFormat('yyyy-MM-dd HH:mm:ss')})` : ''].join(' ').trim()).join(', ')
 			// row.itemOrderNumber = row.itemOrderNumber.join(', ')
 			row.additionalPayAmount = 0
@@ -566,14 +583,12 @@ export class OrderActualFeed implements iFeed {
 			const payData = (row.payData ?? []).map(data => JSON.parse(data)).filter(data => {
 				return ['NP00', 'KP00', '3001'].includes(data?.ResultCode) || data?.isDeposit
 			})
-			let payAmount = payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0)
+			let payAmount = payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0) * amountRate
 
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001' || data?.isDeposit
 				})
-
-			if (row.itemOrderNumber === '') console.log(refundData)
 
 			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
 			if (!(row.isCanceled || row.isReturned)) refundAmount = 0
@@ -764,8 +779,8 @@ export class OrderActualFeed implements iFeed {
 				waypointDeliveryFee = Math.round((ibp[row.ibpManageCode] ?? 0) * currencyRate)
 			} else if (row.weight) {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
-			} else if ([10, 11].includes(row.deliveryMethodId) && menetz[menetzId]) {
-				waypointDeliveryFee = Math.round(menetz[menetzId] * currencyRate)
+			} else if ([10, 11].includes(row.deliveryMethodId) && menetz[row.invoice]) {
+				waypointDeliveryFee = Math.round(menetz[row.invoice] * currencyRate)
 			} else if ([14].includes(row.deliveryMethodId) && iporter[row.invoice]) {
 				waypointDeliveryFee = Math.round(iporter[row.invoice] * currencyRate)
 			}
@@ -824,11 +839,12 @@ export class OrderActualFeed implements iFeed {
 				coupon += row.inheritedOrderCouponDiscountAmount
 			}
 
-			if (isNil(row.inheritedOrderUsePoint)) {
+			/*if (isNil(row.inheritedOrderUsePoint)) {
 				point += Math.round(row.orderPointDiscountAmount * (row.originAmount / (row.totalOriginAmount ?? row.fullTotalOriginAmount)))
 			} else {
 				point += row.inheritedOrderUsePoint
-			}
+			}*/
+			point += row.orderPointDiscountAmount * amountRateCanceled
 
 			let canceledCoupon = 0, canceledPoint = 0, canceledFetchingFee = 0
 
@@ -1014,6 +1030,20 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-07-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
 					'26155364'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 7월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-07-01T00:00:00.000Z'),
+					new Date('2023-08-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1851365005'
 				),
 				contentType: 'text/csv',
 			})
