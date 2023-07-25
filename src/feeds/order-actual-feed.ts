@@ -101,8 +101,10 @@ export class OrderActualFeed implements iFeed {
 		eldexRaw.forEach((row) => {
 			const id = row['국내 택배 송장번호']?.trim() || row['송장번호']?.trim()
 			const value = row['2차결제금액(원)'].replace(/,/g, '')
+			const point = row['적립금사용(원)'].replace(/,/g, '')
+			const coupon = row['쿠폰할인(원)'].replace(/,/g, '')
 			const pgFee = row['PG수수료(원)'].replace(/,/g, '')
-			eldex[id] = parseInt(value) + parseInt(pgFee)
+			eldex[id] = parseInt(value) + parseInt(point) + parseInt(coupon) + parseInt(pgFee)
 		})
 
 		ibpRaw.forEach((row) => {
@@ -556,7 +558,7 @@ export class OrderActualFeed implements iFeed {
               < ?
               )
           GROUP BY io.item_order_number
-          ORDER BY fo.created_at ASC
+          ORDER BY io.item_order_number ASC
 			`,
 			[start, end]
 		)
@@ -583,7 +585,7 @@ export class OrderActualFeed implements iFeed {
 			const payData = (row.payData ?? []).map(data => JSON.parse(data)).filter(data => {
 				return ['NP00', 'KP00', '3001'].includes(data?.ResultCode) || data?.isDeposit
 			})
-			let payAmount = payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0) * amountRate
+			let payAmount = Math.round(payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0) * amountRate)
 
 			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
@@ -844,7 +846,7 @@ export class OrderActualFeed implements iFeed {
 			} else {
 				point += row.inheritedOrderUsePoint
 			}*/
-			point += row.orderPointDiscountAmount * amountRateCanceled
+			point += Math.round(row.orderPointDiscountAmount * amountRateCanceled)
 
 			let canceledCoupon = 0, canceledPoint = 0, canceledFetchingFee = 0
 
