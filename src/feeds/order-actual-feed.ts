@@ -914,7 +914,7 @@ export class OrderActualFeed implements iFeed {
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (['운송료'].includes(key) && rows[i]['운송료'] && rows[i]['운송료'] !== '이슈') continue
+					if (['운송료'].includes(key) && (parseInt(rows[i]['운송료']) || rows[i]['운송료'] !== '이슈')) continue
 					if (['수동 확인 필요'].includes(feed[i][key])) continue
 					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key]) && rows[i][key] === '' && (isNil(feed[i][key]) || feed[i][key] === '')) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
@@ -928,7 +928,6 @@ export class OrderActualFeed implements iFeed {
 					}
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
-					// console.log(feed[i]['상품별 주문번호'], key, feed[i][key])
 					cell.value = feed[i][key]
 					hasModified = true
 				}
@@ -953,90 +952,6 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		/*console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 1월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-01-01T00:00:00.000Z'),
-					new Date('2023-02-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'774838589'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 2월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-02-01T00:00:00.000Z'),
-					new Date('2023-03-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1905523567'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 3월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-03-01T00:00:00.000Z'),
-					new Date('2023-04-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'483712187'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 4월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-04-01T00:00:00.000Z'),
-					new Date('2023-05-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1623898028'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 5월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-05-01T00:00:00.000Z'),
-					new Date('2023-06-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'19761153'
-				),
-				contentType: 'text/csv',
-			})
-		)*/
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 6월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-06-01T00:00:00.000Z'),
-					new Date('2023-07-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'26155364'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
