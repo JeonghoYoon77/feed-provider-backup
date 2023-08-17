@@ -478,8 +478,6 @@ export class OrderPredictionFeed implements iFeed {
 				canceledAdditionalFee = itemPriceData['ADDITIONAL_FEE']
 			}
 
-			if (row.fetching_order_number === '20230331-0000027') console.log(itemPriceData)
-
 			const purchaseValue = itemPriceData['SHOP_PRICE_KOR'] + itemPriceData['DELIVERY_FEE'] + (row.isDDP ? itemPriceData['DUTY_AND_TAX'] : 0)
 			const lCardRefundValue = itemPriceDataCanceled['SHOP_PRICE_KOR'] + itemPriceDataCanceled['DELIVERY_FEE'] - (itemPriceData['DEDUCTED_VAT'] ?? 0) + (itemPriceDataCanceled['DUTY_AND_TAX']) + (itemPriceDataCanceled['WAYPOINT_FEE'] ?? 0) + (itemPriceDataCanceled['ADDITIONAL_FEE'] || 0) + itemPriceDataCanceled['FETCHING_FEE']
 
@@ -616,85 +614,15 @@ export class OrderPredictionFeed implements iFeed {
 	}
 
 	async upload() {
-		/*console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년_1월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-01-01T00:00:00.000Z'),
-					new Date('2023-02-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1578509603'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
-				fileName: '2023년_2월_추정.csv',
+				fileName: '2023년_7월_추정.csv',
 				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-02-01T00:00:00.000Z'),
-					new Date('2023-03-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'624806040'
-				),
-				contentType: 'text/csv',
-			})
-		)*/
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년_3월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-03-01T00:00:00.000Z'),
-					new Date('2023-04-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1833655543'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년_4월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-04-01T00:00:00.000Z'),
-					new Date('2023-05-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1293732805'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년_5월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-05-01T00:00:00.000Z'),
-					new Date('2023-06-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'578254623'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년_6월_추정.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-06-01T00:00:00.000Z'),
 					new Date('2023-07-01T00:00:00.000Z'),
+					new Date('2023-08-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1098358664'
+					'1530152555'
 				),
 				contentType: 'text/csv',
 			})
