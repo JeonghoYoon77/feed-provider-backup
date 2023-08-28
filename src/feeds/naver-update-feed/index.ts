@@ -92,6 +92,7 @@ export class NaverUpdateFeed implements iFeed {
 						 ii.custom_color,
 						 idsi.raw_id                                                         AS designer_style_id,
 						 idsi.raw_color_id                                                   AS designer_color_id,
+						 season,
 						 inpi.naver_product_id,
 
 						 si.shop_type,
@@ -165,6 +166,7 @@ export class NaverUpdateFeed implements iFeed {
 						 JOIN item_origin_price iop on ii.idx = iop.item_id AND isp.price_rule = iop.price_rule
 						 LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx
 						 LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
+					   LEFT JOIN item_seasons season ON ii.idx = season.item_id
 						 LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
 			WHERE ii.is_sellable AND ii.is_show AND ii.idx IN (?)
 		`, [itemIds])
@@ -195,6 +197,7 @@ export class NaverUpdateFeed implements iFeed {
 			itemName: row.item_name,
 			customColor: row.custom_color,
 			mpn: [row.designer_style_id, row.designer_color_id].filter(str => str).join(' '),
+			season: row.season,
 		})
 		const pcLink: string = tsvFormat.link({
 			address: constants.address(),
