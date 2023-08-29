@@ -25,7 +25,7 @@ class TSVFormat {
 
 		const code = `${(mpn ? mpn : [72, 78, 80].includes(shopId) ? idx : itemCode) || ''}`
 
-		let title = `${mainName} ${itemName} ${this.color(customColor)} ${code.replace(/([^\dA-z ])/g, ' ')} ${season} ${this._gender}`
+		let title = `${mainName} ${itemName} ${this.color(customColor)} ${code.replace(/([^\dA-z ])/g, ' ')} ${season || ''} ${this._gender}`
 			.split(' ').filter(str => str).join(' ')
 
 		title = title.replace('è', 'e')
