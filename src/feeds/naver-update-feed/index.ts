@@ -157,7 +157,7 @@ export class NaverUpdateFeed implements iFeed {
 						 GREATEST(ii.updated_at, nui.created_at)                             AS update_time
 			FROM item_info ii
 			    LEFT JOIN naver_upload_item_actual nuia ON ii.idx = nuia.item_id
-                                                 JOIN naver_upload_item nui ON ii.idx = nui.item_id
+                                                 JOIN naver_upload_list nui ON ii.idx = nui.item_id
 						 JOIN item_show_price isp on ii.idx = isp.item_id
 						 JOIN shop_info si on ii.shop_id = si.shop_id
 						 JOIN country_info ci on ii.item_country = ci.country_tag
