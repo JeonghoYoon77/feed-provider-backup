@@ -261,8 +261,8 @@ export class NaverUpdateFeed implements iFeed {
 			'includes_vat': constants.includesVat(),
 			'search_tag': searchTag,
 			maker: row.brand_name,
-			class: row.is_uploaded ? row.is_sellable ? 'U' : 'D' : 'I',
-			update_time: moment(row.update_time).format('YYYY-MM-DD HH:mm:ss')
+			class: row.is_sellable ? row.is_uploaded ? 'U' : 'I' : 'D',
+			'update_time': moment(row.update_time).format('YYYY-MM-DD HH:mm:ss'),
 		}
 	}
 }
