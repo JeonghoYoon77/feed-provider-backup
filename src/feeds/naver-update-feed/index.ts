@@ -52,10 +52,16 @@ export class NaverUpdateFeed implements iFeed {
 			    JOIN item_show_price isp ON ii.idx = isp.item_id
 			LEFT JOIN naver_upload_item_actual nuia on nul.item_id = nuia.item_id
 			WHERE (nuia.item_id IS NULL)
-        OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price OR (!ii.is_sellable AND !ii.is_show)))
+        OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price OR !ii.is_sellable OR !ii.is_show))
 		`)
-		const list = listRaw.map(row => row.item_id)
-		const chunkedList = chunk(list, 100000)
+		const list2Raw = await MySQL.execute(`
+			SELECT nuia.item_id
+			FROM naver_upload_item_actual nuia
+			LEFT JOIN naver_upload_list nul on nul.item_id = nuia.item_id
+			WHERE (nul.item_id IS NULL)
+		`)
+		const list = new Set([...listRaw.map(row => row.item_id), ...list2Raw.map(row => row.item_id)])
+		const chunkedList = chunk(Array.from(list), 100000)
 		const tsvDataList = await Promise.all(chunkedList.map(async list => {
 			const data = await MySQL.execute(NaverUpdateFeed.query(list))
 			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
@@ -154,7 +160,7 @@ export class NaverUpdateFeed implements iFeed {
 						 IF(iif.item_id IS NULL, 'Y', 'N')                                   AS import_flag,
 						 nuia.item_id IS NOT NULL                                            AS is_uploaded,
 						 is_sellable AND ii.is_show                                          AS is_sellable,
-						 GREATEST(ii.updated_at, nui.created_at)                             AS update_time
+						 GREATEST(ii.updated_at, COALESCE(nui.created_at, 0))                AS update_time
 			FROM item_info ii
 			    LEFT JOIN naver_upload_item_actual nuia ON ii.idx = nuia.item_id
                                                  JOIN naver_upload_list nui ON ii.idx = nui.item_id
@@ -169,7 +175,7 @@ export class NaverUpdateFeed implements iFeed {
 						 LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
 					   LEFT JOIN item_seasons season ON ii.idx = season.item_id
 						 LEFT JOIN item_naver_product_id inpi on ii.idx = inpi.idx
-			WHERE ii.is_sellable AND ii.is_show AND ii.idx IN (?)
+			WHERE ii.idx IN (?)
 		`, [itemIds])
 	}
 
@@ -219,6 +225,9 @@ export class NaverUpdateFeed implements iFeed {
 			'fetching-app.s3.ap-northeast-2.amazonaws.com',
 			'static.fetchingapp.co.kr/resize/naver',
 		)
+
+		// eslint-disable-next-line camelcase
+		if (!row.is_sellable) row.update_time = new Date()
 
 		return {
 			id: `F${row.id}`,
