@@ -233,7 +233,7 @@ export class NaverUpdateFeed implements iFeed {
 		)
 
 		// eslint-disable-next-line camelcase
-		if (!row.is_sellable) row.update_time = new Date()
+		row.update_time = new Date()
 
 		return {
 			id: `F${row.id}`,
