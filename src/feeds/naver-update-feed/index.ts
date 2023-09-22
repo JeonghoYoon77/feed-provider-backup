@@ -160,7 +160,13 @@ export class NaverUpdateFeed implements iFeed {
 						 IF(iif.item_id IS NULL, 'Y', 'N')                                   AS import_flag,
 						 nuia.item_id IS NOT NULL                                            AS is_uploaded,
 						 is_sellable AND ii.is_show                                          AS is_sellable,
-						 GREATEST(ii.updated_at + INTERVAL 9 HOUR, COALESCE(nui.created_at, 0))                AS update_time
+						 LEAST(
+						     GREATEST(
+						         ii.updated_at + INTERVAL 9 HOUR,
+						         COALESCE(nui.created_at + INTERVAL 1 HOUR, 0)
+						     ),
+						     NOW()
+						 )                AS update_time
 			FROM item_info ii
 			    LEFT JOIN naver_upload_item_actual nuia ON ii.idx = nuia.item_id
                                                  JOIN naver_upload_list nui ON ii.idx = nui.item_id
