@@ -72,12 +72,14 @@ export class NaverUpdateFeed implements iFeed {
 		for (let i in tsvDataList) {
 			const tsvData: TSVData[] = tsvDataList[i]
 			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
-			fs.appendFileSync('./naver-update-feed.tsv', parse(tsvData, {
-				fields: Object.keys(tsvData[0]),
-				header: i === '0',
-				delimiter,
-				quote: '',
-			}))
+			if (tsvData.length) {
+				fs.appendFileSync('./naver-update-feed.tsv', parse(tsvData, {
+					fields: Object.keys(tsvData[0]),
+					header: i === '0',
+					delimiter,
+					quote: '',
+				}))
+			}
 		}
 		return fs.createReadStream('./naver-update-feed.tsv')
 	}
