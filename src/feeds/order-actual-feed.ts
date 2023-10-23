@@ -60,6 +60,7 @@ export class OrderActualFeed implements iFeed {
 		const iporterSheet = dataDoc.sheetsById['862003963'] // 아이포터 배송 비용
 		const menetzBuySheet = dataDoc.sheetsById['574865687'] // 메네츠 구매 비용
 		const menetzOrderNumberSheet = dataDoc.sheetsById['98520766'] // 메네츠 주문번호
+		const dhlSheet = dataDoc.sheetsById['898638096'] // DHL 배송 비용
 		const lotteCardSheet = dataDoc.sheetsById['1033704797'] // 롯데카드 매입내역 (정확하지만 한달에 한번씩만 갱신)
 		const lotteCardExtraSheet = dataDoc.sheetsById['0'] // 롯데카드 승인내역 (부정확하지만 자주 갱신)
 		const samsungCardSheet = dataDoc.sheetsById['880709363'] // 삼성카드 매출내역
@@ -72,6 +73,7 @@ export class OrderActualFeed implements iFeed {
 		const iporterRaw = await iporterSheet.getRows()
 		const menetzBuyRaw = await menetzBuySheet.getRows()
 		const menetzOrderNumberRaw = await menetzOrderNumberSheet.getRows()
+		const dhlRaw = await dhlSheet.getRows()
 		const lotteCardRaw = await lotteCardSheet.getRows()
 		const lotteCardExtraRaw = await lotteCardExtraSheet.getRows()
 		const samsungCardRaw = await samsungCardSheet.getRows()
@@ -88,6 +90,7 @@ export class OrderActualFeed implements iFeed {
 		const menetzReturnFee = {}
 		const menetzFee = {}
 		const menetzOrderNumberMap = {}
+		const dhl = {}
 		const lotteCard = {}
 		const lotteCardExtra = {}
 		const lotteCardExtraType = {}
@@ -147,9 +150,16 @@ export class OrderActualFeed implements iFeed {
 			}
 		})
 
+		dhlRaw.forEach((row) => {
+			const id = row['상품별 주문 번호']
+			const value = row['실제 배송비']
+			if (dhl[id]) dhl[id] += parseFloat(value)
+			else dhl[id] = parseFloat(value)
+		})
+
 		iporterRaw.forEach((row) => {
-			const id = row['운송장번호']
-			const value = row['전체배송비']
+			const id = row['구매사이트 주문번호']
+			const value = row['합계'].replace(/[^\d.]/g, '')
 			iporter[id] = parseFloat(value)
 		})
 
@@ -188,7 +198,7 @@ export class OrderActualFeed implements iFeed {
 			if (!row['승인번호']) return
 			const id = row['승인번호'].trim().padStart(6, '0')
 			const value = parseInt(row['승인금액'].replace(/,/g, ''))
-			const isCanceled = ['전액승인취소'].includes(row['승인구분'])
+			const isCanceled = ['전액승인취소'].includes(row['승인구분']) && false
 
 			if (row['승인구분']) lotteCardExtraType[id] = row['승인구분']
 
@@ -447,8 +457,11 @@ export class OrderActualFeed implements iFeed {
                  io.waypoint_invoice                                          AS waypointInvoice,
                  (SELECT JSON_ARRAYAGG(opcl.data)
                   FROM commerce.order_pay_cancel_log opcl
+                           JOIN commerce.order_pay_cancel_log_item_map opclim ON opcl.idx = opclim.cancel_log_id
                   WHERE opcl.fetching_order_number = fo.fetching_order_number
-                    AND success)                                              AS refundData,
+                    AND opclim.item_order_number = io.item_order_number
+                    AND success
+                    AND opcl.deleted_at IS NULL)                              AS refundData,
                  (SELECT JSON_ARRAYAGG(oapcl.data)
                   FROM commerce.order_additional_pay_cancel_log oapcl
                            JOIN commerce.order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
@@ -456,7 +469,8 @@ export class OrderActualFeed implements iFeed {
                                 ON oapi.additional_item_number = oapl.additional_item_number
                            JOIN commerce.order_additional_pay oap
                                 on oap.order_additional_number = oapi.order_additional_number
-                  WHERE oap.fetching_order_number = fo.fetching_order_number) AS additionalRefundData,
+                  WHERE oap.fetching_order_number = fo.fetching_order_number
+                    AND oapcl.deleted_at IS NULL)                             AS additionalRefundData,
                  case
                      when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
                          then fo.pay_amount
@@ -518,7 +532,13 @@ export class OrderActualFeed implements iFeed {
                  iocm.amount                                                  AS affiliateFee,
                  oci.item_order_number IS NOT NULL                            AS isCanceled,
                  orefi.item_order_number IS NOT NULL                          AS isRefunded,
-                 oreti.status = 'ACCEPT'                                      AS isReturned
+                 oreti.status = 'ACCEPT'                                      AS isReturned,
+                 EXISTS(
+                    SELECT *
+                    FROM commerce.item_order_promotion iop
+                    WHERE iop.item_order_number = io.item_order_number
+                      AND iop.shop_promotion_id IN (2495, 2496, 2497)
+                    )                                                         AS ssensePromoted
           FROM commerce.fetching_order fo
               JOIN commerce.shop_order so
           ON fo.fetching_order_number = so.fetching_order_number
@@ -775,6 +795,10 @@ export class OrderActualFeed implements iFeed {
 				row.overseasExtraCharge += value
 			}
 
+			if (!cardRefundValue && row.ssensePromoted) {
+				cardRefundValue = -Math.round(cardPurchaseValue * 0.15)
+			}
+
 			let waypointDeliveryFee: any = parseInt(eldex[row.invoice?.trim()] ?? '0')
 
 			if (row.ibpManageCode) {
@@ -783,8 +807,14 @@ export class OrderActualFeed implements iFeed {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			} else if ([10, 11].includes(row.deliveryMethodId) && menetz[row.invoice]) {
 				waypointDeliveryFee = Math.round(menetz[row.invoice] * currencyRate)
-			} else if ([14].includes(row.deliveryMethodId) && iporter[row.invoice]) {
-				waypointDeliveryFee = Math.round(iporter[row.invoice] * currencyRate)
+			} else if ([12, 13].includes(row.deliveryMethodId) && dhl[row.itemOrderNumber]) {
+				waypointDeliveryFee = dhl[row.itemOrderNumber]
+			} else if ([14].includes(row.deliveryMethodId) && iporter[row.itemOrderNumber]) {
+				waypointDeliveryFee = Math.round(iporter[row.itemOrderNumber] * currencyRate)
+			}
+
+			if (!waypointDeliveryFee && row.invoice && [12, 13].includes(row.deliveryMethodId)) {
+				waypointDeliveryFee = '이슈'
 			}
 
 			if (!waypointDeliveryFee && row.waypointInvoice && localStatus.includes(row.itemStatus)) {
@@ -818,7 +848,7 @@ export class OrderActualFeed implements iFeed {
 			}
 
 			if (row.cardApprovalNumber === '메네츠' && menetzRefund[menetzId] === menetzBuy[menetzId] + menetzFee[menetzId]) {
-				canceledWaypointFee = menetzFee[menetzId]
+				canceledWaypointFee = Math.round((menetzFee[menetzId] ?? 0) * currencyRate)
 			}
 
 			let coupon = 0, point = 0
@@ -910,11 +940,11 @@ export class OrderActualFeed implements iFeed {
 		const rows = await targetSheet.getRows()
 		// @ts-ignore
 		await targetSheet.loadCells()
-		let hasModified = false
+		let hasModified = 0
 		for (const i in feed) {
 			if (rows[i]) {
 				for (const key of Object.keys(feed[i])) {
-					if (['운송료'].includes(key) && (parseInt(rows[i]['운송료']) || rows[i]['운송료'] !== '이슈')) continue
+					// if (['운송료'].includes(key) && (parseInt(rows[i]['운송료']) || rows[i]['운송료'] !== '이슈')) continue
 					if (['수동 확인 필요'].includes(feed[i][key])) continue
 					if (isEmpty(rows[i][key]) && isEmpty(feed[i][key]) && rows[i][key] === '' && (isNil(feed[i][key]) || feed[i][key] === '')) continue
 					if (rows[i][key] === (isString(feed[i][key]) ? feed[i][key] : feed[i][key]?.toString())) continue
@@ -929,7 +959,14 @@ export class OrderActualFeed implements iFeed {
 					if (cell.effectiveFormat?.numberFormat?.type?.includes('DATE')) cell.effectiveFormat.numberFormat.type = 'TEXT'
 
 					cell.value = feed[i][key]
-					hasModified = true
+					hasModified++
+
+					if (hasModified && hasModified > 200) {
+						await retry(3, 3000)(async () => {
+							await targetSheet.saveUpdatedCells()
+						})
+						hasModified = 0
+					}
 				}
 			} else {
 				await retry(3, 3000)(async () => {
@@ -961,6 +998,34 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-08-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
 					'1851365005'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 8월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-08-01T00:00:00.000Z'),
+					new Date('2023-09-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1487432265'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 9월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-09-01T00:00:00.000Z'),
+					new Date('2023-10-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1966278706'
 				),
 				contentType: 'text/csv',
 			})
