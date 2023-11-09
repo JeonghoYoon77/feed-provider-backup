@@ -4,7 +4,7 @@ import {chunk} from 'lodash'
 import moment from 'moment'
 import { format } from 'mysql2'
 
-import { MySQL, S3Client } from '../../utils'
+import {MySQL, MySQLWrite, S3Client} from '../../utils'
 
 import { iFeed } from '../feed'
 import Constants from '../naver-feed/constants'
@@ -18,6 +18,8 @@ export class NaverUpdateFeed implements iFeed {
 	static brandSemiNameMap: any
 	static categorySemiNameMap: any
 
+	private chunkedUpdate: any[] = []
+
 	async upload() {
 		const readStream = await this.getTsvBuffer()
 
@@ -28,6 +30,15 @@ export class NaverUpdateFeed implements iFeed {
 		})
 
 		console.log(`FEED_URL: ${feedUrl}`)
+
+		for (const i in this.chunkedUpdate) {
+			console.log('PROCESS\t:', parseInt(i) + 1, '/', this.chunkedUpdate.length)
+
+			await MySQLWrite.execute(`
+        UPDATE naver_upload_item_actual SET is_modified = true WHERE item_id IN (?)
+      `, [this.chunkedUpdate[i]])
+		}
+
 	}
 
 	async getTsvBuffer(delimiter = '\t'): Promise<fs.ReadStream> {
@@ -50,9 +61,11 @@ export class NaverUpdateFeed implements iFeed {
 			FROM naver_upload_list nul
 			    JOIN item_info ii on nul.item_id = ii.idx
 			    JOIN item_show_price isp ON ii.idx = isp.item_id
-			LEFT JOIN naver_upload_item_actual nuia on nul.item_id = nuia.item_id
+			    LEFT JOIN naver_upload_item_actual nuia on nul.item_id = nuia.item_id
 			WHERE (nuia.item_id IS NULL)
-        OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price OR !ii.is_sellable OR !ii.is_show))
+         OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price OR
+                                           !ii.is_sellable OR !ii.is_show OR
+                                           nuia.is_modified))
 		`)
 		const list2Raw = await MySQL.execute(`
 			SELECT nuia.item_id
@@ -65,6 +78,7 @@ export class NaverUpdateFeed implements iFeed {
 		const tsvDataList = await Promise.all(chunkedList.map(async list => {
 			const data = await MySQL.execute(NaverUpdateFeed.query(list))
 			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
+			this.chunkedUpdate.push(currentData.map(row => row.id))
 			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverUpdateFeed.makeRow))).filter(row => row)
 			return tsvData
 		}))
