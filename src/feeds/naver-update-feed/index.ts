@@ -34,9 +34,11 @@ export class NaverUpdateFeed implements iFeed {
 		for (const i in this.chunkedUpdate) {
 			console.log('PROCESS\t:', parseInt(i) + 1, '/', this.chunkedUpdate.length)
 
-			await MySQLWrite.execute(`
-        UPDATE naver_upload_item_actual SET is_modified = true WHERE item_id IN (?)
-      `, [this.chunkedUpdate[i]])
+			if (this.chunkedUpdate[i].length) {
+				await MySQLWrite.execute(`
+					UPDATE naver_upload_item_actual SET is_modified = true WHERE item_id IN (?)
+				`, [this.chunkedUpdate[i]])
+			}
 		}
 
 	}
