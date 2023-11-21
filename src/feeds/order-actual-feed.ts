@@ -992,40 +992,12 @@ export class OrderActualFeed implements iFeed {
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
-				fileName: '2023년 7월.csv',
+				fileName: '2023년 10월.csv',
 				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-07-01T00:00:00.000Z'),
-					new Date('2023-08-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1851365005'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 8월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-08-01T00:00:00.000Z'),
-					new Date('2023-09-01T00:00:00.000Z'),
-					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1487432265'
-				),
-				contentType: 'text/csv',
-			})
-		)
-
-		console.log(
-			await S3Client.upload({
-				folderName: 'feeds',
-				fileName: '2023년 9월.csv',
-				buffer: await this.getTsvBufferWithRange(
-					new Date('2023-09-01T00:00:00.000Z'),
 					new Date('2023-10-01T00:00:00.000Z'),
+					new Date('2023-11-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1966278706'
+					'854151472'
 				),
 				contentType: 'text/csv',
 			})
