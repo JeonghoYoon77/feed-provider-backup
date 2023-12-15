@@ -892,6 +892,7 @@ export class OrderActualFeed implements iFeed {
 				'상품별 주문번호': row.itemOrderNumber,
 				'카드 승인번호': row.cardApprovalNumber?.replace('매입', ''),
 				'전체 주문번호': row.fetching_order_number,
+				'발주 담당자': row.assignee,
 				'전체 주문 상태': Object.entries(statusCount).map(([key, value]) => `${key} ${value}`).join(', '),
 				'편집샵 매입 주문번호': row.vendorOrderNumber,
 				'발주 계정': row.shopAccount,
@@ -998,6 +999,34 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-11-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
 					'854151472'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 11월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-11-01T00:00:00.000Z'),
+					new Date('2023-12-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1070674062'
+				),
+				contentType: 'text/csv',
+			})
+		)
+
+		console.log(
+			await S3Client.upload({
+				folderName: 'feeds',
+				fileName: '2023년 12월.csv',
+				buffer: await this.getTsvBufferWithRange(
+					new Date('2023-12-01T00:00:00.000Z'),
+					new Date('2024-01-01T00:00:00.000Z'),
+					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
+					'1607254203'
 				),
 				contentType: 'text/csv',
 			})
