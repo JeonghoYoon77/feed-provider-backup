@@ -797,6 +797,7 @@ export class OrderActualFeed implements iFeed {
 
 			if (!cardRefundValue && row.ssensePromoted) {
 				cardRefundValue = -Math.round(cardPurchaseValue * 0.15)
+				if (!cardRefundValue) cardRefundValue = 0
 			}
 
 			let waypointDeliveryFee: any = parseInt(eldex[row.invoice?.trim()] ?? '0')
