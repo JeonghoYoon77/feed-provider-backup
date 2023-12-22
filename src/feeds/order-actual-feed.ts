@@ -136,11 +136,12 @@ export class OrderActualFeed implements iFeed {
 			const id = row['주문번호']
 			const value = row['구매액'].replace(/,/g, '')
 			const fee = row['수수료'].replace(/,/g, '')
-			const total = parseFloat(row['적립/차감'].replace(/,/g, ''))
+			const currencyRate = parseFloat(row['적립/차감적용환율'])
+			const total = parseFloat(row['적립/차감 원화환산액'].replace(/,/g, ''))
 
 			if (total < 0 && value && fee) {
-				menetzBuy[id] = parseFloat(value) || 0
-				menetzFee[id] = parseFloat(fee) || 0
+				menetzBuy[id] = (parseFloat(value) || 0) * currencyRate
+				menetzFee[id] = (parseFloat(fee) || 0) * currencyRate
 			} else {
 				if (id) {
 					if (row['특이사항'].includes('구매비 반품 처리')) menetzRefund[id] = total
@@ -782,15 +783,15 @@ export class OrderActualFeed implements iFeed {
 			const menetzId = menetzOrderNumberMap[row.itemOrderNumber]
 
 			if (row.cardApprovalNumber === '메네츠' && menetzBuy[menetzId]) {
-				cardPurchaseValue = Math.round(menetzBuy[menetzId] * currencyRate)
+				cardPurchaseValue = Math.round(menetzBuy[menetzId])
 			}
 
 			if (row.cardApprovalNumber === '메네츠' && menetzRefund[menetzId] === menetzBuy[menetzId] + menetzFee[menetzId]) {
-				cardRefundValue = -Math.round(menetzRefund[menetzId] * currencyRate)
+				cardRefundValue = -Math.round(menetzRefund[menetzId])
 			}
 
 			if (row.cardApprovalNumber === '메네츠' && menetzReturnFee[menetzId]) {
-				let value = Math.round(menetzReturnFee[menetzId] * currencyRate)
+				let value = Math.round(menetzReturnFee[menetzId])
 				if (value < 0) value = -value
 				row.overseasExtraCharge += value
 			}
@@ -838,7 +839,7 @@ export class OrderActualFeed implements iFeed {
 			}
 
 			if ([10, 11].includes(row.deliveryMethodId)) {
-				waypointFee = Math.round((menetzFee[menetzId] ?? 0) * currencyRate)
+				waypointFee = Math.round((menetzFee[menetzId] ?? 0))
 			}
 
 			let canceledDeductedVat = 0, canceledWaypointFee = 0
@@ -849,7 +850,7 @@ export class OrderActualFeed implements iFeed {
 			}
 
 			if (row.cardApprovalNumber === '메네츠' && menetzRefund[menetzId] === menetzBuy[menetzId] + menetzFee[menetzId]) {
-				canceledWaypointFee = Math.round((menetzFee[menetzId] ?? 0) * currencyRate)
+				canceledWaypointFee = Math.round((menetzFee[menetzId] ?? 0))
 			}
 
 			let coupon = 0, point = 0
@@ -1005,7 +1006,7 @@ export class OrderActualFeed implements iFeed {
 			})
 		)
 
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 11월.csv',
@@ -1031,6 +1032,6 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 	}
 }
