@@ -199,7 +199,7 @@ export class PiclickFeed implements iFeed {
 				'event_words': constants.eventWords(),
 				coupon: tsvFormat.coupon(row.ip_final_price),
 				'partner_coupon_download': row.product_no ? tsvFormat.partnerCouponDownload(row.ip_final_price) : '',
-				'interest_free_event': '삼성카드^2~3|현대카드^2~3|BC카드^2~3|KB국민카드^2~3|하나카드^2~3|NH농협카드^2~4|신한카드^2~3',
+				'interest_free_event': '현대카드^2~3|BC카드^2~4|KB국민카드^2~3|하나카드^2~3|NH농협카드^2~4|신한카드^2~3|롯데카드^2~3|삼성카드^2~3|우리카드^2~4',
 				point,
 				'manufacture_define_number': row.designer_style_id || '',
 				'naver_product_id': row.naver_product_id || '',
