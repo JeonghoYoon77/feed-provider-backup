@@ -66,11 +66,13 @@ export class NaverFeed implements iFeed {
 		const list = listRaw.map(row => row.item_id)
 		const chunkedList = chunk(list, 100000)
 
+		let completed = 0
 		const tsvDataList = await Promise.all(chunkedList.map(async list => {
 			const data = await MySQL.execute(NaverFeed.query(list))
 			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
 			this.chunkedUpdate.push(currentData.map(row => [row.id, row.ip_final_price]))
 			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverFeed.makeRow))).filter(row => row)
+			console.log('PROCESS\t:', ++completed, '/', chunkedList.length)
 			return tsvData
 		}))
 
