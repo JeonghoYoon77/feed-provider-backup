@@ -72,13 +72,13 @@ export class NaverFeed implements iFeed {
 			const currentData = data.filter(row => row.option_detail && row.category_name1 && row.category_name2 && row.category_name3 && !(row.brand_id === 17 && row.category_name2 === '악세서리'))
 			this.chunkedUpdate.push(currentData.map(row => [row.id, row.ip_final_price]))
 			const tsvData: TSVData[] = (await Promise.all(currentData.map(NaverFeed.makeRow))).filter(row => row)
-			console.log('PROCESS\t:', ++completed, '/', chunkedList.length)
+			console.log('PROCESS\t:', 'SELECT', ++completed, '/', chunkedList.length)
 			return tsvData
 		}))
 
 		for (let i in tsvDataList) {
 			const tsvData: TSVData[] = tsvDataList[i]
-			console.log('PROCESS\t:', parseInt(i) + 1, '/', chunkedList.length)
+			console.log('PROCESS\t:', 'FILE', parseInt(i) + 1, '/', chunkedList.length)
 			fs.appendFileSync('./naver-feed.tsv', parse(tsvData, {
 				fields: Object.keys(tsvData[0]),
 				header: i === '0',
