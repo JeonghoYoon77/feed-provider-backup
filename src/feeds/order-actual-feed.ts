@@ -126,10 +126,9 @@ export class OrderActualFeed implements iFeed {
 
 		menetzRaw.forEach((row) => {
 			const id = row['Shipping No.']
-			const value = row['Delivery Fee']
-			const fee = row['Additional Fee']
-			if (menetz[id]) menetz[id] += parseFloat(value) + parseFloat(fee)
-			else menetz[id] = parseFloat(value) + parseFloat(fee)
+			const value = row['원화환산액']
+			if (menetz[id]) menetz[id] += parseFloat(value)
+			else menetz[id] = parseFloat(value)
 		})
 
 		menetzBuyRaw.forEach((row) => {
@@ -832,7 +831,7 @@ export class OrderActualFeed implements iFeed {
 			} else if (row.weight) {
 				waypointDeliveryFee = parseInt(((row.weight < 1 ? 4 + 3.2 + 1.5 : 4 * row.weight + 3.2 + 1.5) * currencyRate).toFixed(3))
 			} else if ([10, 11].includes(row.deliveryMethodId) && menetz[row.invoice]) {
-				waypointDeliveryFee = Math.round(menetz[row.invoice] * currencyRate)
+				waypointDeliveryFee = Math.round(menetz[row.invoice])
 			} else if ([12, 13].includes(row.deliveryMethodId) && dhl[row.itemOrderNumber]) {
 				waypointDeliveryFee = dhl[row.itemOrderNumber]
 			} else if ([14].includes(row.deliveryMethodId) && iporter[row.itemOrderNumber]) {
