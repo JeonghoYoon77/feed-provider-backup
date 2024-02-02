@@ -456,7 +456,12 @@ export class OrderActualFeed implements iFeed {
                  scc.name                                                     AS shippingCompany,
                  io.invoice                                                   AS invoice,
                  io.waypoint_invoice                                          AS waypointInvoice,
-                 (SELECT JSON_ARRAYAGG(opcl.data)
+                 (SELECT JSON_ARRAYAGG(JSON_OBJECT(
+												   'data', opcl.data,
+                           'itemOrderNumberList', (SELECT JSON_ARRAYAGG(item_order_number)
+                                                   FROM commerce.order_pay_cancel_log_item_map opclim2
+                                                   WHERE opclim2.cancel_log_id = opcl.idx)
+                         ))
                   FROM commerce.order_pay_cancel_log opcl
                            JOIN commerce.order_pay_cancel_log_item_map opclim ON opcl.idx = opclim.cancel_log_id
                   WHERE opcl.fetching_order_number = fo.fetching_order_number
@@ -465,12 +470,14 @@ export class OrderActualFeed implements iFeed {
                     AND opcl.deleted_at IS NULL)                              AS refundData,
                  (SELECT JSON_ARRAYAGG(oapcl.data)
                   FROM commerce.order_additional_pay_cancel_log oapcl
+														JOIN commerce.order_additional_pay_cancel_log_item_map oapclim ON oapcl.idx = oapclim.cancel_log_id
                            JOIN commerce.order_additional_pay_log oapl on oapcl.order_additional_pay_log_id = oapl.idx
                            JOIN commerce.order_additional_pay_item oapi
                                 ON oapi.additional_item_number = oapl.additional_item_number
                            JOIN commerce.order_additional_pay oap
                                 on oap.order_additional_number = oapi.order_additional_number
                   WHERE oap.fetching_order_number = fo.fetching_order_number
+                    AND oapclim.item_order_number = io.item_order_number
                     AND oapcl.deleted_at IS NULL)                             AS additionalRefundData,
                  case
                      when oc.order_cancel_number IS NOT NULL AND (oref.refund_amount < 0 or oref.refund_amount is null)
@@ -590,7 +597,7 @@ export class OrderActualFeed implements iFeed {
         WHERE currency_tag = 'EUR'
 		`)
 
-		const feed = data.map((row) => {
+		const feed = await Promise.all(data.map(async (row) => {
 			let memo = ''
 
 			const amountRate = row.itemPayAmount / (row.itemOrderInfo.sum ?? 0)
@@ -604,11 +611,28 @@ export class OrderActualFeed implements iFeed {
 			row.additionalPayAmount = 0
 
 			const payData = (row.payData ?? []).map(data => JSON.parse(data)).filter(data => {
-				return ['NP00', 'KP00', '3001'].includes(data?.ResultCode) || data?.isDeposit
+				return ['NP00', 'KP00', '3001', '4110'].includes(data?.ResultCode) || data?.isDeposit
 			})
 			let payAmount = Math.round(payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0) * amountRate)
 
-			const refundData = [...row.refundData ?? [], ...row.additionalRefundData ?? []]
+			const refundDataRaw = await Promise.all((row.refundData ?? []).map(async data => {
+				const actualData = JSON.parse(data.data)
+				if (data.itemOrderNumberList.length > 1) {
+					const refundData = await MySQL.execute(`
+						SELECT item_order_number itemOrderNumber,
+						       refund_amount refundAmount
+						FROM commerce.order_refund_item ori
+						WHERE item_order_number IN (?)
+						  AND status = 'ACCEPT'
+					`, [data.itemOrderNumberList])
+					const refundAmountTotal = refundData.reduce((total, data) => total + data.refundAmount, 0)
+					const refundAmount = refundData.find((data) => data.itemOrderNumber === row.itemOrderNumber).refundAmount
+					actualData.CancelAmt = Math.round(refundAmount / refundAmountTotal * parseInt(actualData.CancelAmt))
+				}
+				return JSON.stringify(actualData)
+			}))
+
+			const refundData = [...refundDataRaw, ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
 					return data?.ResultCode === '2001' || data?.isDeposit
 				})
@@ -937,9 +961,9 @@ export class OrderActualFeed implements iFeed {
 			}
 
 			return data
-		})
+		}))
 
-		let targetSheet = targetDoc.sheetsById[targetSheetId]
+		/*let targetSheet = targetDoc.sheetsById[targetSheetId]
 		const rows = await targetSheet.getRows()
 		// @ts-ignore
 		await targetSheet.loadCells()
@@ -982,7 +1006,7 @@ export class OrderActualFeed implements iFeed {
 			await retry(3, 3000)(async () => {
 				await targetSheet.saveUpdatedCells()
 			})
-		}
+		}*/
 
 		return parse(feed, {
 			fields: Object.keys(feed[0]),
@@ -992,7 +1016,7 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 10월.csv',
@@ -1004,7 +1028,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
 		/*console.log(
 			await S3Client.upload({
@@ -1018,8 +1042,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
-
+		)*/
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
@@ -1028,10 +1051,10 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-12-01T00:00:00.000Z'),
 					new Date('2024-01-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1607254203'
+					'902215699'
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 	}
 }
