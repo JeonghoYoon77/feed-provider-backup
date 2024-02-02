@@ -165,7 +165,7 @@ export class OrderActualFeed implements iFeed {
 		})
 
 		taxRaw.forEach((row) => {
-			if (row['운송장번호']) {
+			if (row['운송장번호'] && row['진행상황'] === '납부완료') {
 				const id = row['운송장번호'].trim()
 				const value = row['고지 금액'].replace(/,/g, '')
 				tax[id] = parseInt(value)
