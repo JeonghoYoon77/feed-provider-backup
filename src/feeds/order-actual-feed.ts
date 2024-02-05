@@ -838,7 +838,7 @@ export class OrderActualFeed implements iFeed {
 				waypointDeliveryFee = Math.round(iporter[row.itemOrderNumber] * currencyRate)
 			}
 
-			if (!waypointDeliveryFee && row.invoice && [12, 13].includes(row.deliveryMethodId)) {
+			if (!waypointDeliveryFee && row.invoice && [10, 11, 12, 13, 14, 15, 16].includes(row.deliveryMethodId)) {
 				waypointDeliveryFee = '이슈'
 			}
 
@@ -1015,7 +1015,7 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 10월.csv',
@@ -1027,9 +1027,9 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
-		console.log(
+		/*console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 11월.csv',
@@ -1041,7 +1041,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)
+		)*/
 
 		console.log(
 			await S3Client.upload({
