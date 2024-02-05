@@ -16,7 +16,11 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async getTsvBuffer(): Promise<Buffer> {
-		return Buffer.from(await this.getTsv({start: null, end: null}), 'utf-8')
+		try {
+			return Buffer.from(await this.getTsv({start: null, end: null}), 'utf-8')
+		} catch (e) {
+			console.log(e.response)
+		}
 	}
 
 	async getTsv({start, end, targetSheetId, targetDocId = '1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4'}: { start: Date, end: Date, targetSheetId?: string, targetDocId?: string }): Promise<string> {
@@ -297,8 +301,7 @@ export class OrderActualFeed implements iFeed {
                     AND orefi2.item_order_number IS NULL)                     AS itemOrderInfoWithoutCancel,
                  (SELECT JSON_ARRAYAGG(opl.data)
                   FROM commerce.order_pay_log opl
-                           JOIN commerce.order_pay_log_item_map oplim ON opl.idx = oplim.log_id
-                  WHERE oplim.item_order_number = io.item_order_number) AS payData,
+                  WHERE opl.fetching_order_number = fo.fetching_order_number) AS payData,
                  (SELECT JSON_ARRAYAGG(JSON_OBJECT('method', oapi.pay_method, 'amount', oapi.amount))
                   FROM commerce.order_additional_pay oap
                            JOIN commerce.order_additional_pay_item oapi
@@ -320,12 +323,14 @@ export class OrderActualFeed implements iFeed {
                  fo.pay_method,
                  (SELECT JSON_ARRAYAGG(status)
                   FROM (SELECT case
-                                   when ori2.return_item_number is not null
-                                       then '반품'
                                    when ori2.status = 'IN_PROGRESS'
                                        then '반품 진행 중'
+                                   when ori2.status = 'REQUEST_RECEIVE'
+                                       then '반품 접수'
                                    when ori2.status = 'HOLD'
                                        then '반품 보류'
+                                   when ori2.return_item_number is not null
+                                       then '반품'
                                    when oci2.cancel_item_number is not null
                                        then '주문 취소'
                                    when fo2.status = 'COMPLETE'
@@ -375,7 +380,7 @@ export class OrderActualFeed implements iFeed {
                                               oci2.deleted_at IS NULL
                                  left join commerce.order_return_item ori2
                                            on io2.item_order_number = ori2.item_order_number AND
-                                              ori2.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT') AND
+                                              ori2.status IN ('IN_PROGRESS', 'REQUEST_RECEIVE', 'HOLD', 'ACCEPT') AND
                                               ori2.deleted_at IS NULL
                         WHERE so2.fetching_order_number = fo.fetching_order_number
                           AND io2.deleted_at IS NULL
@@ -405,12 +410,14 @@ export class OrderActualFeed implements iFeed {
                      )                                                        AS returnFee,
                  oret.reason_type                                             AS returnReason,
                  case
-                     when oreti.return_item_number is not null
-                         then '반품'
                      when oreti.status = 'IN_PROGRESS'
                          then '반품 진행 중'
+                     when oreti.status = 'REQUEST_RECEIVE'
+                         then '반품 접수'
                      when oreti.status = 'HOLD'
                          then '반품 보류'
+                     when oreti.return_item_number is not null
+                         then '반품'
                      when oci.cancel_item_number is not null
                          then '주문 취소'
                      when fo.status = 'COMPLETE'
@@ -543,8 +550,11 @@ export class OrderActualFeed implements iFeed {
                  EXISTS(
                     SELECT *
                     FROM commerce.item_order_promotion iop
+                    JOIN shop_promotion_rule spr ON iop.shop_promotion_id = spr.idx
+                    JOIN shop_promotions sp ON spr.promotion_id = sp.id
                     WHERE iop.item_order_number = io.item_order_number
                       AND iop.shop_promotion_id IN (2495, 2496, 2497)
+                      AND so.shop_id = sp.shop_id
                     )                                                         AS ssensePromoted
           FROM commerce.fetching_order fo
               JOIN commerce.shop_order so
@@ -552,7 +562,7 @@ export class OrderActualFeed implements iFeed {
               JOIN commerce.item_order io on so.shop_order_number = io.shop_order_number
               LEFT JOIN commerce.order_cancel_item oci ON io.item_order_number = oci.item_order_number AND oci.status = 'ACCEPT' AND oci.deleted_at IS NULL
               LEFT JOIN commerce.order_cancel oc on oci.order_cancel_number = oc.order_cancel_number
-              LEFT JOIN commerce.order_return_item oreti ON oreti.item_order_number = io.item_order_number AND oreti.status IN ('IN_PROGRESS', 'HOLD', 'ACCEPT') AND oreti.deleted_at IS NULL
+              LEFT JOIN commerce.order_return_item oreti ON oreti.item_order_number = io.item_order_number AND oreti.status IN ('IN_PROGRESS', 'REQUEST_RECEIVE', 'HOLD', 'ACCEPT') AND oreti.deleted_at IS NULL
               LEFT JOIN commerce.order_return oret on oreti.order_return_number = oret.order_return_number
               LEFT JOIN commerce.order_return_extra_charge oretec_D ON oretec_D.order_return_number = oret.order_return_number AND oretec_D.reason_type = 'DOMESTIC_RETURN'
               LEFT JOIN commerce.order_return_extra_charge oretec_O ON oretec_O.order_return_number = oret.order_return_number AND oretec_O.reason_type = 'OVERSEAS_RETURN'
@@ -578,7 +588,12 @@ export class OrderActualFeed implements iFeed {
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
             AND io.deleted_at IS NULL
-            AND fo.fetching_order_number='20231106-0000070'
+            AND (
+              (fo.created_at + INTERVAL 9 HOUR) >= ?
+                  AND
+              (fo.created_at + INTERVAL 9 HOUR)
+                  < ?
+              )
           GROUP BY io.item_order_number
           ORDER BY io.item_order_number ASC
 			`,
@@ -605,7 +620,7 @@ export class OrderActualFeed implements iFeed {
 			row.additionalPayAmount = 0
 
 			const payData = (row.payData ?? []).map(data => JSON.parse(data)).filter(data => {
-				return ['NP00', 'KP00', '3001', '4110'].includes(data?.ResultCode) || data?.isDeposit
+				return ['NP00', 'KP00', '3001', '4000', '4110'].includes(data?.ResultCode) || data?.isDeposit
 			})
 			let payAmount = Math.round(payData.reduce(((a: number, b: any) => a + parseInt(b.Amt)), 0) * amountRate)
 
@@ -628,7 +643,7 @@ export class OrderActualFeed implements iFeed {
 
 			const refundData = [...refundDataRaw, ...row.additionalRefundData ?? []]
 				.map(data => JSON.parse(data)).filter(data => {
-					return data?.ResultCode === '2001' || data?.isDeposit
+					return ['2001', '4330'].includes(data?.ResultCode) || data?.isDeposit
 				})
 
 			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
@@ -956,8 +971,6 @@ export class OrderActualFeed implements iFeed {
 
 			return data
 		}))
-		console.log(feed)
-		return
 
 		let targetSheet = targetDoc.sheetsById[targetSheetId]
 		const rows = await targetSheet.getRows()
@@ -1012,7 +1025,7 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		/*console.log(
+		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 10월.csv',
@@ -1024,9 +1037,9 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 
-		/*console.log(
+		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 11월.csv',
@@ -1038,7 +1051,7 @@ export class OrderActualFeed implements iFeed {
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 
 		console.log(
 			await S3Client.upload({
