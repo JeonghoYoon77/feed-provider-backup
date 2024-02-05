@@ -578,12 +578,7 @@ export class OrderActualFeed implements iFeed {
           WHERE fo.paid_at IS NOT NULL
             AND fo.deleted_at IS NULL
             AND io.deleted_at IS NULL
-            AND (
-              (fo.created_at + INTERVAL 9 HOUR) >= ?
-            AND
-              (fo.created_at + INTERVAL 9 HOUR)
-              < ?
-              )
+            AND fo.fetching_order_number='20231106-0000070'
           GROUP BY io.item_order_number
           ORDER BY io.item_order_number ASC
 			`,
@@ -637,7 +632,7 @@ export class OrderActualFeed implements iFeed {
 				})
 
 			let refundAmount = refundData.reduce(((a: number, b: any) => a + parseInt(b.CancelAmt)), 0)
-			if (!(row.isCanceled || row.isReturned)) refundAmount = 0
+			// if (!(row.isCanceled || row.isReturned)) refundAmount = 0
 			// const salesAmount = row.payAmount - refundAmount
 			// const totalPrice = priceData.SHOP_PRICE_KOR + priceData.DUTY_AND_TAX + priceData.DELIVERY_FEE
 			// const totalTotalPrice = !row.refundAmount ? (totalPrice + pgFee - refundAmount) : 0
@@ -961,6 +956,8 @@ export class OrderActualFeed implements iFeed {
 
 			return data
 		}))
+		console.log(feed)
+		return
 
 		let targetSheet = targetDoc.sheetsById[targetSheetId]
 		const rows = await targetSheet.getRows()
