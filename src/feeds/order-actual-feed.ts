@@ -126,7 +126,7 @@ export class OrderActualFeed implements iFeed {
 
 		menetzRaw.forEach((row) => {
 			const id = row['Shipping No.']
-			const value = row['원화환산액']
+			const value = row['원화환산액'].replace(/,/g, '')
 			if (menetz[id]) menetz[id] += parseFloat(value)
 			else menetz[id] = parseFloat(value)
 		})
@@ -962,7 +962,7 @@ export class OrderActualFeed implements iFeed {
 			return data
 		}))
 
-		/*let targetSheet = targetDoc.sheetsById[targetSheetId]
+		let targetSheet = targetDoc.sheetsById[targetSheetId]
 		const rows = await targetSheet.getRows()
 		// @ts-ignore
 		await targetSheet.loadCells()
@@ -1005,7 +1005,7 @@ export class OrderActualFeed implements iFeed {
 			await retry(3, 3000)(async () => {
 				await targetSheet.saveUpdatedCells()
 			})
-		}*/
+		}
 
 		return parse(feed, {
 			fields: Object.keys(feed[0]),
@@ -1015,7 +1015,7 @@ export class OrderActualFeed implements iFeed {
 	}
 
 	async upload() {
-		/*console.log(
+		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 10월.csv',
@@ -1023,13 +1023,13 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-10-01T00:00:00.000Z'),
 					new Date('2023-11-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'854151472'
+					'85392976'
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
 
-		/*console.log(
+		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
 				fileName: '2023년 11월.csv',
@@ -1037,11 +1037,12 @@ export class OrderActualFeed implements iFeed {
 					new Date('2023-11-01T00:00:00.000Z'),
 					new Date('2023-12-01T00:00:00.000Z'),
 					'1jdeeoxYli6FnDWFxsWNAixwiWI8P1u0euqoNhE__OF4',
-					'1070674062'
+					'1810900598'
 				),
 				contentType: 'text/csv',
 			})
-		)*/
+		)
+
 		console.log(
 			await S3Client.upload({
 				folderName: 'feeds',
