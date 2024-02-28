@@ -180,6 +180,7 @@ export class NaverUpdateFeed implements iFeed {
 						 is_sellable AND ii.is_show                                          AS is_sellable,
 						 LEAST(
 						     GREATEST(
+										 ip.updated_at + INTERVAL 9 HOUR,
 						         ii.updated_at + INTERVAL 9 HOUR,
 						         COALESCE(nui.created_at + INTERVAL 1 HOUR, 0)
 						     ),
