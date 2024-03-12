@@ -76,6 +76,9 @@ export class NaverUpdateFeed implements iFeed {
 			WHERE (nul.item_id IS NULL)
 		`)
 		const list = new Set([...listRaw.map(row => row.item_id), ...list2Raw.map(row => row.item_id)])
+
+		console.log(`PROCESS\t: TOTAL ${list.size} ITEMS`)
+
 		const chunkedList = chunk(Array.from(list), 100000)
 		const tsvDataList = await Promise.all(chunkedList.map(async list => {
 			const data = await MySQL.execute(NaverUpdateFeed.query(list))
