@@ -59,15 +59,15 @@ export class NaverUpdateFeed implements iFeed {
 		NaverUpdateFeed.categorySemiNameMap = Object.fromEntries(categorySemiNameRaw.map(row => [row.categoryId, row.semiName]))
 
 		const listRaw = await MySQL.execute(`
-			SELECT nul.item_id
-			FROM naver_upload_list nul
-			    JOIN item_info ii on nul.item_id = ii.idx
-			    JOIN item_show_price isp ON ii.idx = isp.item_id
-			    LEFT JOIN naver_upload_item_actual nuia on nul.item_id = nuia.item_id
-			WHERE (nuia.item_id IS NULL)
-         OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price OR
-                                           !ii.is_sellable OR !ii.is_show OR
-                                           nuia.is_modified))
+        SELECT nul.item_id,
+               (nuia.item_id IS NULL)
+                   OR (nuia.item_id IS NOT NULL AND (nuia.final_price != isp.price OR
+                                                     !ii.is_sellable OR !ii.is_show OR
+                                                     nuia.is_modified)) isUploadable
+        FROM naver_upload_list nul
+                 JOIN item_info ii on nul.item_id = ii.idx
+                 JOIN item_show_price isp ON ii.idx = isp.item_id
+                 LEFT JOIN naver_upload_item_actual nuia on nul.item_id = nuia.item_id
 		`)
 		const list2Raw = await MySQL.execute(`
 			SELECT nuia.item_id
@@ -75,7 +75,7 @@ export class NaverUpdateFeed implements iFeed {
 			LEFT JOIN naver_upload_list nul on nul.item_id = nuia.item_id
 			WHERE (nul.item_id IS NULL)
 		`)
-		const list = new Set([...listRaw.map(row => row.item_id), ...list2Raw.map(row => row.item_id)])
+		const list = new Set([...listRaw.filter(row => row.isUploadable).map(row => row.item_id), ...list2Raw.map(row => row.item_id)])
 
 		console.log(`PROCESS\t: TOTAL ${list.size} ITEMS`)
 
