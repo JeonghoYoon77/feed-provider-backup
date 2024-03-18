@@ -33,7 +33,7 @@ jobs:
               env:
                   ECR_REGISTRY: 605438638109.dkr.ecr.ap-northeast-2.amazonaws.com
                   ECR_REPOSITORY: feed-provider
-                  IMAGE_TAG: test
+                  IMAGE_TAG: latest
               run: |
                   # Build a docker container and
                   # push it to ECR so that it can
