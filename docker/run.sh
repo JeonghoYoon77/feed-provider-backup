@@ -1,3 +1,3 @@
 cd /home/feed-provider
 
-npm start $*
+npm run start:prod $*

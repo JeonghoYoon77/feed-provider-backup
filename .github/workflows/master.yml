@@ -3,7 +3,6 @@ on:
     push:
         branches:
             - main
-            - feature/docker
     workflow_dispatch:
 
 name: Deploy Data Processor to Amazon ECR
