@@ -3,6 +3,7 @@ on:
     push:
         branches:
             - main
+            - feature/docker
     workflow_dispatch:
 
 name: Deploy Data Processor to Amazon ECR
@@ -33,11 +34,11 @@ jobs:
               env:
                   ECR_REGISTRY: 605438638109.dkr.ecr.ap-northeast-2.amazonaws.com
                   ECR_REPOSITORY: feed-provider
-                  IMAGE_TAG: latest
+                  IMAGE_TAG: test
               run: |
                   # Build a docker container and
                   # push it to ECR so that it can
                   # be deployed to ECS.
-                  docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./docker/build
+                  docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./docker
                   docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
                   echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
