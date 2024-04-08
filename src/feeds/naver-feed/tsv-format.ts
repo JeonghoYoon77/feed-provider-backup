@@ -79,7 +79,7 @@ class TSVFormat {
 	price(price: number): number {
 		let rawPrice = price
 
-		rawPrice *= 0.95
+		rawPrice *= 0.94
 
 		return Math.ceil(rawPrice / 100) * 100
 	}
