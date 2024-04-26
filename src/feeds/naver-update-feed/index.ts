@@ -114,7 +114,7 @@ export class NaverUpdateFeed implements iFeed {
 						 bi.brand_name,
 						 bi.brand_name_kor,
 						 ii.item_gender,
-                           COALESCE(tt.translated_text, ion.name)                AS item_name,
+             ii.item_name,
 						 ii.origin_name,
 						 ii.custom_color,
 						 idsi.raw_id                                                         AS designer_style_id,
@@ -199,8 +199,6 @@ export class NaverUpdateFeed implements iFeed {
 						 JOIN item_price ip on ii.idx = ip.item_id AND isp.price_rule = ip.price_rule
 						 JOIN item_user_price iup on ii.idx = iup.item_id AND isp.price_rule = iup.price_rule
 						 JOIN item_origin_price iop on ii.idx = iop.item_id AND isp.price_rule = iop.price_rule
-             JOIN item_original_name ion on ii.idx = ion.item_id
-             LEFT JOIN translated_text tt ON ion.name = tt.origin_text AND ion.lang = tt.origin_lang
 						 LEFT JOIN item_import_flag iif ON iif.item_id = ii.idx
 						 LEFT JOIN item_designer_style_id idsi ON ii.idx = idsi.item_id
 					   LEFT JOIN item_seasons season ON ii.idx = season.item_id
