@@ -33,7 +33,20 @@ class TSVFormat {
 		title = title.replace('É', 'E')
 		title = title.split('\n').join('')
 
-		return title.replace(/([&"'_])/g, ' ').split(' ').filter(data => data).join(' ')
+		title = title.replace(/([&"'_])/g, ' ').split(' ').filter(data => data).join(' ')
+
+		if (title.length > 50) {
+			title = `${mainName} ${lastCategory} ${this.color(customColor)} ${code.replace(/([^\dA-z ])/g, ' ')} ${season || ''} ${this._gender}`
+				.split(' ').filter(str => str).join(' ')
+
+			title = title.replace('è', 'e')
+			title = title.replace('É', 'E')
+			title = title.split('\n').join('')
+
+			title = title.replace(/([&"'_])/g, ' ').split(' ').filter(data => data).join(' ')
+		}
+
+		return title
 	}
 
 	public link({ address }) {
