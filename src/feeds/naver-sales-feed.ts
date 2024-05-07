@@ -130,6 +130,11 @@ export class NaverSalesFeed implements iFeed {
 							},
 						},
 						{
+							exists: {
+								'field': 'item',
+							},
+						},
+						{
 							range: {
 								createdAt: {
 									gte: target,
