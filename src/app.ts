@@ -19,10 +19,12 @@ import {CoochaFeed} from './feeds/coocha-feed'
 
 program.version(version)
 program.option('-f, --feed-name <feedName>', '피드 이름')
+program.option('-c, --chunk-size <chunkSize>', '청크 사이즈')
 program.parse(process.argv)
 
 async function main() {
 	const feedName = (program.feedName || '').toUpperCase()
+	const chunkSize: number = (Number(program.chunkSize) || 1000);
 	const feedExecute = {
 		'NAVER-FEED': async () => {
 			const naverFeed = new NaverFeed()
@@ -65,7 +67,7 @@ async function main() {
 		},
 		'ZAI-FEED': async () => {
 			const zaiFeed = new ZaiFeed()
-			await zaiFeed.upload()
+			await zaiFeed.upload(chunkSize)
 		},
 		'ORDER-FEED': async () => {
 			const orderFeed = new OrderFeed()

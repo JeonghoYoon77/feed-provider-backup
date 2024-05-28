@@ -35,6 +35,7 @@ export class MySQL {
 	 * @param {Array} params
 	 */
 	static async execute(query, params = []): Promise<any[]> {
+		console.log(query);
 		let connection: PoolConnection
 		try {
 			connection = await connectionPool.getConnection()
@@ -76,3 +77,8 @@ export class MySQLWrite {
 		await connectionPoolWrite.end()
 	}
 }
+
+export type Paging = {
+	offset: number,
+	limit: number
+};
